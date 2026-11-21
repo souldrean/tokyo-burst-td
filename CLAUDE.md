@@ -19,7 +19,7 @@ Tower defense anime (personagens **originais**, nunca copiar animes/jogos existe
 partidas de ~3 min, low-poly + neon, **juice em toda ação** (confete, luz, pop). Público 10–18,
 mobile + PC, UI em inglês. Sem monetização na v1.
 
-Plano: S1 mapa ✅ · S2 ondas/inimigos/base ✅ · S3 unidades + dinheiro ✅ (aguardando teste das cartas) ·
+Plano: S1 mapa ✅ · S2 ondas/inimigos/base ✅ · S3 unidades + dinheiro ✅ ·
 S4 upgrade/venda · S5 juice extra · S6 DataStore · S7 gacha + pity · S8 lobby/co-op teleporte ·
 S9 level/missões diárias · S10 UI mobile + arte · S11 QA/perf · S12 lançamento.
 
@@ -47,12 +47,17 @@ python3 tools/sim_match.py     # balanceamento (manter em sync com Config.luau)
   Erros de API (ex.: enum inexistente) só aparecem assim — revisão por leitura já deixou passar um.
 - Não publique o jogo, não gaste Robux, não insira assets da loja sem o João aprovar.
 
-## Primeira sessão local (pendente)
-1. Confirmar que o MCP conecta (teste do `docs/TUTORIAL-MCP-STUDIO.md`, passo 5).
-2. Instalar **Rokit** e rodar `rokit install` (Rojo, Selene, StyLua pinados em `rokit.toml`),
-   instalar o plugin do Rojo no Studio, usar `rojo serve` para sync ao vivo.
-3. Rodar `selene src` e corrigir avisos.
-4. Confirmar que as 3 cartas da hotbar aparecem (bug `FitWithinMaxAxis` corrigido no commit d730b69).
+## Primeira sessão local ✅ (concluída em 2026-11-21)
+MCP testado, Rokit + Rojo/Selene/StyLua/Wally instalados (`~/.rokit/bin`), plugin do Rojo no
+Studio, `selene src` com 0 avisos, 3 cartas da hotbar confirmadas no Play.
+
+Lições para não repetir:
+- Sync ao vivo: `rojo serve` (porta 34872) → no Studio, Plugins → Rojo → Connect → **Accept**
+  na tela de mudanças (sem o Accept nada é aplicado). Confira pelo MCP que o código chegou.
+- `.model.json` no Rojo 7.4: CFrame e atributos precisam de **tipo explícito** dentro de
+  `Properties` (`"Attributes": {"Attributes": {"Index": {"Float64": 1}}}`). Atributo no topo do
+  nó é descartado **sem aviso**. O `gen_map.py` já gera assim.
+- Pendente: `stylua src` acusa 20 arquivos fora do padrão (anterior à sessão).
 
 ## Git
 Commits pequenos em português, `git push` ao terminar cada etapa. Nunca commitar segredos.
