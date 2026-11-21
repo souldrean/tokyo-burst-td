@@ -12,18 +12,110 @@
 					<string name="Name">Config</string>
 					<ProtectedString name="Source"><![CDATA[--!strict
 -- Config: todos os numeros "ajustaveis" do jogo ficam aqui.
--- Assim, para mudar a velocidade do cubo (por exemplo), voce mexe em UM lugar so.
+-- Assim, para mudar a velocidade de um inimigo, voce mexe em UM lugar so.
 -- table.freeze deixa a tabela somente leitura: ninguem muda um valor por engano.
+-- ATENCAO: ENEMIES, WAVES, WAVE_TIMEOUT_SECONDS e INTERMISSION_SECONDS tem uma copia
+-- em tools/sim_match.py. Se mudar aqui, mude la tambem (mantenha em sincronia).
+
+local Types = require(script.Parent.Types)
+
+local ENEMIES: { [string]: Types.EnemyDef } = {
+	Grunt = {
+		health = 20,
+		speed = 20,
+		baseDamage = 5,
+		reward = 5,
+		size = Vector3.new(2.4, 2.8, 2.4),
+		color = Color3.fromRGB(170, 40, 60),
+		eyeColor = Color3.fromRGB(255, 240, 80),
+		horns = false,
+	},
+	Runner = {
+		health = 12,
+		speed = 32,
+		baseDamage = 4,
+		reward = 4,
+		size = Vector3.new(1.8, 2.2, 1.8),
+		color = Color3.fromRGB(255, 120, 30),
+		eyeColor = Color3.fromRGB(255, 255, 255),
+		horns = false,
+	},
+	Tank = {
+		health = 90,
+		speed = 14,
+		baseDamage = 12,
+		reward = 15,
+		size = Vector3.new(4, 4.4, 4),
+		color = Color3.fromRGB(90, 40, 140),
+		eyeColor = Color3.fromRGB(255, 60, 60),
+		horns = true,
+	},
+	Oni = {
+		health = 600,
+		speed = 12,
+		baseDamage = 40,
+		reward = 100,
+		size = Vector3.new(6.5, 7.5, 6.5),
+		color = Color3.fromRGB(200, 20, 20),
+		eyeColor = Color3.fromRGB(255, 220, 0),
+		horns = true,
+	},
+}
+
+local WAVES: { Types.WaveDef } = {
+	{ groups = { { kind = "Grunt", count = 5, interval = 1.2 } } },
+	{ groups = { { kind = "Grunt", count = 8, interval = 1.0 } } },
+	{ groups = { { kind = "Grunt", count = 6, interval = 1.0 }, { kind = "Runner", count = 4, interval = 0.8 } } },
+	{ groups = { { kind = "Grunt", count = 8, interval = 0.8 }, { kind = "Tank", count = 2, interval = 2.0 } } },
+	{ groups = { { kind = "Runner", count = 10, interval = 0.6 }, { kind = "Grunt", count = 6, interval = 0.8 } } },
+	{ groups = { { kind = "Tank", count = 3, interval = 2.0 }, { kind = "Grunt", count = 10, interval = 0.7 } } },
+	{ groups = { { kind = "Runner", count = 12, interval = 0.5 }, { kind = "Tank", count = 3, interval = 1.5 } } },
+	{
+		groups = {
+			{ kind = "Grunt", count = 15, interval = 0.5 },
+			{ kind = "Tank", count = 4, interval = 1.5 },
+			{ kind = "Runner", count = 6, interval = 0.5 },
+		},
+	},
+	{
+		groups = {
+			{ kind = "Tank", count = 6, interval = 1.0 },
+			{ kind = "Runner", count = 14, interval = 0.4 },
+			{ kind = "Grunt", count = 10, interval = 0.5 },
+		},
+	},
+	{
+		groups = {
+			{ kind = "Grunt", count = 8, interval = 0.6 },
+			{ kind = "Tank", count = 4, interval = 1.2 },
+			{ kind = "Oni", count = 1, interval = 1.0 },
+		},
+		boss = true,
+	},
+}
 
 local Config = {
-	-- Liga/desliga o cubo de teste que anda pelo caminho dos inimigos.
-	PATH_PREVIEW_ENABLED = true,
-	-- Velocidade do cubo em studs por segundo.
+	-- Cubo de teste da semana 1 (codigo mantido, mas desligado).
+	PATH_PREVIEW_ENABLED = false,
 	PATH_PREVIEW_SPEED = 20,
-	-- Tamanho do cubo (3x3x3 studs).
 	PATH_PREVIEW_CUBE_SIZE = 3,
-	-- Altura (Y) onde o cubo anda. A estrada fica perto de Y = 0.
 	PATH_PREVIEW_HEIGHT = 2,
+
+	-- Partida
+	INTERMISSION_SECONDS = 6, -- pausa antes da primeira onda
+	RESTART_DELAY_SECONDS = 8, -- tempo na tela de Vitoria/Derrota antes de recomecar
+	BASE_MAX_HEALTH = 100,
+	WAVE_TIMEOUT_SECONDS = 15, -- depois disto a proxima onda comeca mesmo com inimigos vivos
+
+	-- Servidor
+	SERVER_TICK_RATE = 10, -- vezes por segundo que o servidor confere se inimigos chegaram ao fim
+	MAX_ENEMIES_ALIVE = 60, -- limite de seguranca
+
+	-- Debug (so no Studio)
+	DEBUG_HIT_DAMAGE = 5,
+
+	ENEMIES = ENEMIES,
+	WAVES = WAVES,
 }
 
 return table.freeze(Config)
@@ -31,6 +123,66 @@ return table.freeze(Config)
 				</Properties>
 			</Item>
 			<Item class="ModuleScript" referent="RBX00000004">
+				<Properties>
+					<string name="Name">Net</string>
+					<ProtectedString name="Source"><![CDATA[--!strict
+-- Net: acesso centralizado aos RemoteEvents.
+-- No servidor: cria a pasta ReplicatedStorage.Remotes e cada evento sob demanda
+-- (assim a ordem de init() entre sistemas nao importa).
+-- No cliente: so espera o evento existir (cliente nunca cria remotes).
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Types = require(script.Parent.Types)
+
+export type RemoteName = Types.RemoteName
+
+local FOLDER_NAME = "Remotes"
+local CLIENT_TIMEOUT = 30
+
+local Net = {}
+
+local function getServerFolder(): Folder
+	local existing = ReplicatedStorage:FindFirstChild(FOLDER_NAME)
+	if existing then
+		assert(existing:IsA("Folder"), "Net: ReplicatedStorage.Remotes deveria ser uma Folder")
+		return existing
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = FOLDER_NAME
+	folder.Parent = ReplicatedStorage
+	return folder
+end
+
+function Net.event(name: RemoteName): RemoteEvent
+	if RunService:IsServer() then
+		local folder = getServerFolder()
+		local existing = folder:FindFirstChild(name)
+		if existing then
+			assert(existing:IsA("RemoteEvent"), `Net: "{name}" deveria ser um RemoteEvent`)
+			return existing
+		end
+		local remote = Instance.new("RemoteEvent")
+		remote.Name = name
+		remote.Parent = folder
+		return remote
+	end
+
+	-- Cliente: espera com tempo limite e erro claro.
+	local folder = ReplicatedStorage:WaitForChild(FOLDER_NAME, CLIENT_TIMEOUT)
+	assert(folder, `Net: ReplicatedStorage.Remotes nao apareceu em {CLIENT_TIMEOUT}s`)
+	local remote = folder:WaitForChild(name, CLIENT_TIMEOUT)
+	assert(remote, `Net: o RemoteEvent "{name}" nao apareceu em {CLIENT_TIMEOUT}s`)
+	assert(remote:IsA("RemoteEvent"), `Net: "{name}" deveria ser um RemoteEvent`)
+	return remote
+end
+
+return Net
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX00000005">
 				<Properties>
 					<string name="Name">Types</string>
 					<ProtectedString name="Source"><![CDATA[--!strict
@@ -46,15 +198,87 @@ export type PathData = {
 	total: number, -- comprimento total do caminho
 }
 
+-- Nomes dos RemoteEvents (a lista fica aqui para cliente e servidor concordarem).
+export type RemoteName = "EnemyDied" | "BaseHit" | "WaveStarted" | "MatchEnded" | "DebugHitEnemy"
+
+-- Por que um inimigo saiu do jogo: morto por nos ou chegou no fim (vazou).
+export type DeathReason = "Killed" | "Leaked"
+
+export type MatchResult = "Victory" | "Defeat"
+
+-- Estados da partida (atributo State em ReplicatedStorage.MatchState).
+export type MatchStateName = "Waiting" | "Intermission" | "Wave" | "Victory" | "Defeat"
+
+-- Payloads (ordem dos argumentos de cada RemoteEvent, servidor -> clientes):
+--   EnemyDied(id: string, reason: DeathReason, position: Vector3, reward: number)
+--   BaseHit(damage: number, healthLeft: number)
+--   WaveStarted(wave: number, waveCount: number, isBoss: boolean)
+--   MatchEnded(result: MatchResult)
+--   DebugHitEnemy(id: string)   <- cliente -> servidor (so no Studio)
+export type EnemyDiedPayload = {
+	id: string,
+	reason: DeathReason,
+	position: Vector3,
+	reward: number,
+}
+
+-- Dados de um tipo de inimigo (vem do Config.ENEMIES).
+export type EnemyDef = {
+	health: number,
+	speed: number,
+	baseDamage: number,
+	reward: number,
+	size: Vector3,
+	color: Color3,
+	eyeColor: Color3,
+	horns: boolean,
+}
+
+-- Um grupo de inimigos do mesmo tipo dentro de uma onda.
+export type WaveGroup = {
+	kind: string,
+	count: number,
+	interval: number, -- segundos entre cada spawn
+}
+
+export type WaveDef = {
+	groups: { WaveGroup },
+	boss: boolean?,
+}
+
 return {}
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX00000005">
+			<Item class="Folder" referent="RBX00000006">
 				<Properties>
 					<string name="Name">Util</string>
 				</Properties>
-				<Item class="ModuleScript" referent="RBX00000006">
+				<Item class="ModuleScript" referent="RBX00000007">
+					<Properties>
+						<string name="Name">EnemyMath</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- EnemyMath: matematica PURA do movimento dos inimigos.
+-- O servidor nao move inimigos todo frame: guarda so (BaseDistance, BaseTime, Speed).
+-- Servidor e clientes usam esta MESMA formula, entao todo mundo ve o inimigo no mesmo lugar.
+
+local EnemyMath = {}
+
+-- distancia(agora) = BaseDistance + Speed * (agora - BaseTime)
+-- Nunca devolve negativo (se o relogio do cliente estiver um pouco atrasado).
+function EnemyMath.distanceAt(baseDistance: number, baseTime: number, speed: number, now: number): number
+	local d = baseDistance + speed * (now - baseTime)
+	if d ~= d or d < 0 then -- "d ~= d" so e verdade para NaN
+		return 0
+	end
+	return d
+end
+
+return EnemyMath
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX00000008">
 					<Properties>
 						<string name="Name">PathMath</string>
 						<ProtectedString name="Source"><![CDATA[--!strict
@@ -81,7 +305,24 @@ function PathMath.build(points: { Vector3 }): Types.PathData
 end
 
 function PathMath.totalLength(points: { Vector3 }): number
-	return PathMath.build(points).total
+	-- Direcao (vetor unitario no plano XZ) da reta onde a distancia cai.
+-- Serve para o inimigo "olhar" para onde esta andando. Se nao der para calcular
+-- (sem retas, ou reta so vertical), devolve Vector3.zAxis como valor seguro.
+function PathMath.directionAt(data: Types.PathData, distance: number): Vector3
+	if #data.points < 2 then
+		return Vector3.zAxis
+	end
+
+	local index = PathMath.segmentAt(data, distance)
+	local delta = data.points[index + 1] - data.points[index]
+	local flat = Vector3.new(delta.X, 0, delta.Z)
+	if flat.Magnitude < 1e-4 then
+		return Vector3.zAxis
+	end
+	return flat.Unit
+end
+
+return PathMath.build(points).total
 end
 
 -- Descobre em qual reta (indice) a distancia cai e a fracao t (0 a 1) dentro dela.
@@ -126,6 +367,23 @@ function PathMath.positionAt(data: Types.PathData, distance: number): Vector3
 	return data.points[index]:Lerp(data.points[index + 1], t)
 end
 
+-- Direcao (vetor unitario no plano XZ) da reta onde a distancia cai.
+-- Serve para o inimigo "olhar" para onde esta andando. Se nao der para calcular
+-- (sem retas, ou reta so vertical), devolve Vector3.zAxis como valor seguro.
+function PathMath.directionAt(data: Types.PathData, distance: number): Vector3
+	if #data.points < 2 then
+		return Vector3.zAxis
+	end
+
+	local index = PathMath.segmentAt(data, distance)
+	local delta = data.points[index + 1] - data.points[index]
+	local flat = Vector3.new(delta.X, 0, delta.Z)
+	if flat.Magnitude < 1e-4 then
+		return Vector3.zAxis
+	end
+	return flat.Unit
+end
+
 return PathMath
 ]]></ProtectedString>
 					</Properties>
@@ -133,11 +391,11 @@ return PathMath
 			</Item>
 		</Item>
 	</Item>
-	<Item class="ServerScriptService" referent="RBX00000007">
+	<Item class="ServerScriptService" referent="RBX00000009">
 		<Properties>
 			<string name="Name">ServerScriptService</string>
 		</Properties>
-		<Item class="Script" referent="RBX00000008">
+		<Item class="Script" referent="RBX0000000A">
 			<Properties>
 				<string name="Name">Server</string>
 				<ProtectedString name="Source"><![CDATA[--!strict
@@ -169,11 +427,690 @@ for _, system in loaded do
 end
 ]]></ProtectedString>
 			</Properties>
-			<Item class="Folder" referent="RBX00000009">
+			<Item class="Folder" referent="RBX0000000B">
 				<Properties>
 					<string name="Name">Systems</string>
 				</Properties>
-				<Item class="ModuleScript" referent="RBX0000000A">
+				<Item class="ModuleScript" referent="RBX0000000C">
+					<Properties>
+						<string name="Name">BaseService</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- BaseService: guarda a vida da base. So o servidor muda esse numero.
+-- MatchService escuta onChanged para copiar o valor para o atributo MatchState.BaseHealth.
+-- (Assim BaseService nao precisa conhecer MatchService: evita require circular.)
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local BaseService = {}
+
+local health: number = Config.BASE_MAX_HEALTH
+local baseHitRemote: RemoteEvent? = nil
+
+type ChangedCallback = (health: number, maxHealth: number) -> ()
+local listeners: { ChangedCallback } = {}
+
+local function notify()
+	for _, callback in listeners do
+		callback(health, Config.BASE_MAX_HEALTH)
+	end
+end
+
+function BaseService.init()
+	baseHitRemote = Net.event("BaseHit")
+end
+
+-- Registra uma funcao chamada quando a vida muda. Devolve uma funcao para cancelar.
+function BaseService.onChanged(callback: ChangedCallback): () -> ()
+	table.insert(listeners, callback)
+	return function()
+		local index = table.find(listeners, callback)
+		if index then
+			table.remove(listeners, index)
+		end
+	end
+end
+
+function BaseService.getHealth(): number
+	return health
+end
+
+function BaseService.isDead(): boolean
+	return health <= 0
+end
+
+function BaseService.damage(amount: number)
+	-- Defesa: ignora valores estranhos (NaN, negativo, zero) e base ja destruida.
+	if amount ~= amount or amount <= 0 or health <= 0 then
+		return
+	end
+	local dealt = math.min(amount, health)
+	health = math.max(0, health - amount)
+	if baseHitRemote then
+		baseHitRemote:FireAllClients(dealt, health)
+	end
+	notify()
+end
+
+function BaseService.reset()
+	health = Config.BASE_MAX_HEALTH
+	notify()
+end
+
+return BaseService
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX0000000D">
+					<Properties>
+						<string name="Name">DebugService</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- DebugService: ferramenta de teste SO para o Studio.
+-- O cliente clica num inimigo e manda DebugHitEnemy(id); o servidor valida tudo
+-- (nunca confie no cliente) e aplica dano pelo mesmo caminho do jogo real.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local EnemyService = require(script.Parent.EnemyService)
+
+local DebugService = {}
+
+local MAX_ID_LENGTH = 16
+local RATE_PER_SECOND = 10 -- maximo de cliques por segundo por jogador
+local BURST = 10
+
+type Bucket = { tokens: number, last: number }
+local buckets: { [Player]: Bucket } = {}
+local connections: { RBXScriptConnection } = {}
+
+-- "Balde de fichas": cada clique gasta 1 ficha; as fichas voltam com o tempo.
+local function allow(player: Player): boolean
+	local now = os.clock()
+	local bucket = buckets[player]
+	if not bucket then
+		bucket = { tokens = BURST, last = now }
+		buckets[player] = bucket
+	end
+	bucket.tokens = math.min(BURST, bucket.tokens + (now - bucket.last) * RATE_PER_SECOND)
+	bucket.last = now
+	if bucket.tokens < 1 then
+		return false
+	end
+	bucket.tokens -= 1
+	return true
+end
+
+function DebugService.init()
+	-- Fora do Studio nem criamos o remote nem ligamos o handler.
+	if not RunService:IsStudio() then
+		return
+	end
+
+	local remote = Net.event("DebugHitEnemy")
+	table.insert(
+		connections,
+		remote.OnServerEvent:Connect(function(player: Player, id: unknown)
+			if not allow(player) then
+				return
+			end
+			-- Tipo e tamanho primeiro; so depois usamos o valor.
+			if typeof(id) ~= "string" then
+				return
+			end
+			if #id > MAX_ID_LENGTH then
+				return
+			end
+			-- O inimigo precisa existir (getDistance devolve nil se nao existir).
+			if EnemyService.getDistance(id) == nil then
+				return
+			end
+			EnemyService.damage(id, Config.DEBUG_HIT_DAMAGE)
+		end)
+	)
+
+	-- Jogador saiu: apaga o balde dele (senao a tabela guardaria o Player para sempre).
+	table.insert(
+		connections,
+		Players.PlayerRemoving:Connect(function(player: Player)
+			buckets[player] = nil
+		end)
+	)
+end
+
+-- Limpeza explicita (nao usada no jogo normal).
+function DebugService.destroy()
+	for _, connection in connections do
+		connection:Disconnect()
+	end
+	table.clear(connections)
+	table.clear(buckets)
+end
+
+return DebugService
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX0000000E">
+					<Properties>
+						<string name="Name">EnemyService</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- EnemyService: cria, guarda e remove os inimigos.
+-- IDEIA CENTRAL: o servidor NAO move inimigos todo frame. Cada inimigo guarda
+-- (BaseDistance, BaseTime, Speed) e a distancia agora e:
+--   BaseDistance + Speed * (agora - BaseTime)
+-- O servidor confere isso 10 vezes por segundo (so para saber se chegou ao fim).
+-- Cada cliente calcula a mesma formula todo frame e move a sua copia local do modelo.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Types = require(Shared:WaitForChild("Types"))
+local PathMath = require(Shared:WaitForChild("Util"):WaitForChild("PathMath"))
+local EnemyMath = require(Shared:WaitForChild("Util"):WaitForChild("EnemyMath"))
+
+local PathService = require(script.Parent.PathService)
+local BaseService = require(script.Parent.BaseService)
+
+local EnemyService = {}
+
+type Enemy = {
+	model: Model,
+	kind: string,
+	health: number,
+	maxHealth: number,
+	speed: number,
+	baseDistance: number,
+	baseTime: number,
+	baseDamage: number,
+	reward: number,
+	heightOffset: number,
+}
+
+type RemovedCallback = (id: string, reason: Types.DeathReason) -> ()
+
+-- Tabela por id: assim nunca precisamos varrer o workspace a cada tick.
+local enemies: { [string]: Enemy } = {}
+local aliveCount = 0
+local nextId = 0
+local container: Folder? = nil
+local diedRemote: RemoteEvent? = nil
+local tickConnection: RBXScriptConnection? = nil
+local removedListeners: { RemovedCallback } = {}
+
+-- Lista reaproveitada a cada tick (evita criar uma tabela nova 10x por segundo).
+local leakedBuffer: { string } = {}
+
+local HORN_COLOR = Color3.fromRGB(235, 228, 205)
+
+-- Cria uma peca de enfeite soldada ao Root.
+local function makeDecoration(name: string, root: BasePart, size: Vector3, color: Color3, offset: CFrame, neon: boolean)
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Size = size
+	part.Color = color
+	part.Material = if neon then Enum.Material.Neon else Enum.Material.SmoothPlastic
+	part.Anchored = false
+	part.Massless = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false -- so o Root e clicavel
+	part.CFrame = root.CFrame * offset
+	part.Parent = root.Parent
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = root
+	weld.Part1 = part
+	weld.Parent = part
+end
+
+-- Monta o visual "demonio": corpo em bloco + 2 olhos Neon + chifres (Tank/Oni).
+-- Feito pelo SERVIDOR uma vez no spawn; depois so os clientes movem a copia local.
+local function buildModel(id: string, kind: string, def: Types.EnemyDef, startCFrame: CFrame): Model
+	local model = Instance.new("Model")
+	model.Name = id
+
+	local root = Instance.new("Part")
+	root.Name = "Root"
+	root.Size = def.size
+	root.Color = def.color
+	root.Material = Enum.Material.SmoothPlastic
+	root.Anchored = true
+	root.CanCollide = false
+	root.CanTouch = false
+	root.CanQuery = true -- clicavel (debug)
+	root.CFrame = startCFrame
+	root.Parent = model
+	model.PrimaryPart = root
+
+	-- Olhos na frente (a frente do CFrame.lookAt e o eixo -Z).
+	local eye = math.max(0.35, def.size.X * 0.14)
+	local eyeSize = Vector3.new(eye, eye, eye * 0.6)
+	for _, side in { -1, 1 } do
+		makeDecoration(
+			"Eye",
+			root,
+			eyeSize,
+			def.eyeColor,
+			CFrame.new(side * def.size.X * 0.22, def.size.Y * 0.15, -def.size.Z / 2),
+			true
+		)
+	end
+
+	if def.horns then
+		local hornHeight = def.size.Y * 0.35
+		local hornWidth = math.max(0.4, def.size.X * 0.12)
+		for _, side in { -1, 1 } do
+			makeDecoration(
+				"Horn",
+				root,
+				Vector3.new(hornWidth, hornHeight, hornWidth),
+				HORN_COLOR,
+				CFrame.new(side * def.size.X * 0.3, def.size.Y / 2 + hornHeight / 2 - 0.05, 0)
+					* CFrame.Angles(0, 0, -side * 0.3),
+				false
+			)
+		end
+	end
+
+	return model
+end
+
+-- Remove o inimigo da tabela, destroi o modelo e avisa quem escuta.
+local function remove(id: string, reason: Types.DeathReason)
+	local enemy = enemies[id]
+	if not enemy then
+		return
+	end
+	enemies[id] = nil
+	aliveCount -= 1
+	enemy.model:Destroy()
+	for _, callback in removedListeners do
+		callback(id, reason)
+	end
+end
+
+local function currentDistance(enemy: Enemy, now: number): number
+	return EnemyMath.distanceAt(enemy.baseDistance, enemy.baseTime, enemy.speed, now)
+end
+
+-- Posicao do centro do inimigo (para os efeitos dos clientes).
+local function centerPosition(enemy: Enemy, distance: number): Vector3
+	return PathMath.positionAt(PathService.getPathData(), distance) + Vector3.yAxis * enemy.heightOffset
+end
+
+local function fireDied(id: string, reason: Types.DeathReason, position: Vector3, reward: number)
+	if diedRemote then
+		diedRemote:FireAllClients(id, reason, position, reward)
+	end
+end
+
+function EnemyService.init()
+	local folder = Instance.new("Folder")
+	folder.Name = "Enemies"
+	folder.Parent = workspace
+	container = folder
+	diedRemote = Net.event("EnemyDied")
+end
+
+-- Cria um inimigo no inicio do caminho. Devolve o id, ou nil se nao puder criar.
+function EnemyService.spawn(kind: string): string?
+	local folder = container
+	if not folder then
+		return nil
+	end
+	local def = Config.ENEMIES[kind]
+	if not def then
+		warn(`EnemyService.spawn: tipo desconhecido "{kind}"`)
+		return nil
+	end
+	if aliveCount >= Config.MAX_ENEMIES_ALIVE then
+		return nil -- limite de seguranca
+	end
+
+	nextId += 1
+	local id = `E{nextId}`
+	local data = PathService.getPathData()
+	local heightOffset = def.size.Y / 2
+	local startPos = PathMath.positionAt(data, 0) + Vector3.yAxis * heightOffset
+	local startCFrame = CFrame.lookAt(startPos, startPos + PathMath.directionAt(data, 0))
+	local now = workspace:GetServerTimeNow()
+
+	local model = buildModel(id, kind, def, startCFrame)
+	model:SetAttribute("Id", id)
+	model:SetAttribute("Kind", kind)
+	model:SetAttribute("Health", def.health)
+	model:SetAttribute("MaxHealth", def.health)
+	model:SetAttribute("Speed", def.speed)
+	model:SetAttribute("BaseDistance", 0)
+	model:SetAttribute("BaseTime", now)
+	model:SetAttribute("HeightOffset", heightOffset)
+	model.Parent = folder
+
+	enemies[id] = {
+		model = model,
+		kind = kind,
+		health = def.health,
+		maxHealth = def.health,
+		speed = def.speed,
+		baseDistance = 0,
+		baseTime = now,
+		baseDamage = def.baseDamage,
+		reward = def.reward,
+		heightOffset = heightOffset,
+	}
+	aliveCount += 1
+	return id
+end
+
+-- Tira vida do inimigo. Se chegar a 0: avisa os clientes (Killed) e remove.
+function EnemyService.damage(id: string, amount: number)
+	local enemy = enemies[id]
+	if not enemy then
+		return
+	end
+	if amount ~= amount or amount <= 0 then
+		return
+	end
+	enemy.health = math.max(0, enemy.health - amount)
+	enemy.model:SetAttribute("Health", enemy.health)
+	if enemy.health <= 0 then
+		local position = centerPosition(enemy, currentDistance(enemy, workspace:GetServerTimeNow()))
+		fireDied(id, "Killed", position, enemy.reward)
+		remove(id, "Killed")
+	end
+end
+
+-- Muda a velocidade fazendo "rebase": guarda onde o inimigo esta AGORA como nova base.
+-- Sem isso, o inimigo daria um pulo para tras/frente quando a velocidade mudasse.
+function EnemyService.setSpeed(id: string, speed: number)
+	local enemy = enemies[id]
+	if not enemy then
+		return
+	end
+	if speed ~= speed or speed < 0 then
+		return
+	end
+	local now = workspace:GetServerTimeNow()
+	enemy.baseDistance = currentDistance(enemy, now)
+	enemy.baseTime = now
+	enemy.speed = speed
+	-- Ordem nao importa para o cliente: ele le tudo do mesmo jeito (atributos replicam juntos).
+	enemy.model:SetAttribute("BaseDistance", enemy.baseDistance)
+	enemy.model:SetAttribute("BaseTime", now)
+	enemy.model:SetAttribute("Speed", speed)
+end
+
+function EnemyService.getDistance(id: string): number?
+	local enemy = enemies[id]
+	if not enemy then
+		return nil
+	end
+	return currentDistance(enemy, workspace:GetServerTimeNow())
+end
+
+-- Remove todos sem disparar eventos (usado ao terminar/reiniciar a partida).
+function EnemyService.clearAll()
+	for id, enemy in enemies do
+		enemies[id] = nil
+		enemy.model:Destroy()
+	end
+	aliveCount = 0
+end
+
+function EnemyService.aliveCount(): number
+	return aliveCount
+end
+
+-- Registra uma funcao chamada quando um inimigo sai (Killed ou Leaked).
+-- Devolve uma funcao para cancelar.
+function EnemyService.onEnemyRemoved(callback: RemovedCallback): () -> ()
+	table.insert(removedListeners, callback)
+	return function()
+		local index = table.find(removedListeners, callback)
+		if index then
+			table.remove(removedListeners, index)
+		end
+	end
+end
+
+-- Confere quem chegou ao fim do caminho.
+local function checkLeaks()
+	local total = PathService.getPathData().total
+	local now = workspace:GetServerTimeNow()
+
+	-- Primeiro juntamos os ids; so depois removemos (nao mexer na tabela enquanto percorre).
+	table.clear(leakedBuffer)
+	for id, enemy in enemies do
+		if currentDistance(enemy, now) >= total then
+			table.insert(leakedBuffer, id)
+		end
+	end
+
+	for _, id in leakedBuffer do
+		local enemy = enemies[id]
+		if enemy then
+			fireDied(id, "Leaked", centerPosition(enemy, total), 0)
+			BaseService.damage(enemy.baseDamage)
+			remove(id, "Leaked")
+		end
+	end
+end
+
+function EnemyService.start()
+	if tickConnection then
+		return
+	end
+	-- Acumula o tempo do Heartbeat e roda a conferencia 10x por segundo.
+	local interval = 1 / Config.SERVER_TICK_RATE
+	local accumulated = 0
+	tickConnection = RunService.Heartbeat:Connect(function(dt: number)
+		accumulated += dt
+		if accumulated < interval then
+			return
+		end
+		accumulated %= interval
+		checkLeaks()
+	end)
+end
+
+-- Para o loop (nao usado no jogo normal, mas deixa a limpeza explicita).
+function EnemyService.stop()
+	if tickConnection then
+		tickConnection:Disconnect()
+		tickConnection = nil
+	end
+end
+
+return EnemyService
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX0000000F">
+					<Properties>
+						<string name="Name">MatchService</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- MatchService: dono da partida. Cria ReplicatedStorage.MatchState (atributos que
+-- replicam sozinhos para os clientes) e roda o loop:
+-- Waiting -> Intermission -> ondas 1..N -> Victory/Defeat -> espera -> recomeca.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Types = require(Shared:WaitForChild("Types"))
+
+local EnemyService = require(script.Parent.EnemyService)
+local BaseService = require(script.Parent.BaseService)
+
+local MatchService = {}
+
+local POLL_SECONDS = 0.1 -- espera curta usada para conferir condicoes (barato)
+
+local state: Folder? = nil
+local waveStartedRemote: RemoteEvent? = nil
+local matchEndedRemote: RemoteEvent? = nil
+local cleanups: { () -> () } = {}
+
+local function setAttr(name: string, value: string | number)
+	if state then
+		state:SetAttribute(name, value)
+	end
+end
+
+local function setState(name: Types.MatchStateName, endsAt: number)
+	setAttr("State", name)
+	setAttr("StateEndsAt", endsAt)
+end
+
+function MatchService.init()
+	local folder = Instance.new("Folder")
+	folder.Name = "MatchState"
+	folder:SetAttribute("State", "Waiting")
+	folder:SetAttribute("Wave", 0)
+	folder:SetAttribute("WaveCount", #Config.WAVES)
+	folder:SetAttribute("BaseHealth", BaseService.getHealth())
+	folder:SetAttribute("BaseMaxHealth", Config.BASE_MAX_HEALTH)
+	folder:SetAttribute("StateEndsAt", 0)
+	folder:SetAttribute("EnemiesAlive", 0)
+	folder.Parent = ReplicatedStorage
+	state = folder
+
+	waveStartedRemote = Net.event("WaveStarted")
+	matchEndedRemote = Net.event("MatchEnded")
+
+	-- Copia a vida da base e a contagem de inimigos para os atributos.
+	table.insert(
+		cleanups,
+		BaseService.onChanged(function(health: number, maxHealth: number)
+			setAttr("BaseHealth", health)
+			setAttr("BaseMaxHealth", maxHealth)
+		end)
+	)
+	table.insert(
+		cleanups,
+		EnemyService.onEnemyRemoved(function()
+			setAttr("EnemiesAlive", EnemyService.aliveCount())
+		end)
+	)
+end
+
+-- Espera ate existir pelo menos 1 jogador (a partida nao gasta ondas sem ninguem olhando).
+local function waitForPlayers()
+	while #Players:GetPlayers() < 1 do
+		task.wait(0.5)
+	end
+end
+
+-- Spawna os grupos da onda em sequencia. Para cedo se a base cair.
+local function spawnWave(wave: Types.WaveDef)
+	for _, group in wave.groups do
+		for _ = 1, group.count do
+			if BaseService.isDead() then
+				return
+			end
+			-- Se o limite de inimigos vivos for atingido, spawn devolve nil: so pulamos.
+			EnemyService.spawn(group.kind)
+			setAttr("EnemiesAlive", EnemyService.aliveCount())
+			task.wait(group.interval)
+		end
+	end
+end
+
+local function endMatch(result: Types.MatchResult)
+	setState(result, workspace:GetServerTimeNow() + Config.RESTART_DELAY_SECONDS)
+	if result == "Defeat" then
+		EnemyService.clearAll()
+		setAttr("EnemiesAlive", 0)
+	end
+	if matchEndedRemote then
+		matchEndedRemote:FireAllClients(result)
+	end
+end
+
+-- Roda uma partida completa. Devolve "Victory" ou "Defeat".
+local function runMatch(): Types.MatchResult
+	-- Intermission: contagem regressiva antes da onda 1.
+	local endsAt = workspace:GetServerTimeNow() + Config.INTERMISSION_SECONDS
+	setState("Intermission", endsAt)
+	while workspace:GetServerTimeNow() < endsAt do
+		task.wait(POLL_SECONDS)
+	end
+
+	local waveCount = #Config.WAVES
+	for index, wave in Config.WAVES do
+		setAttr("Wave", index)
+		setState("Wave", 0) -- onda nao tem hora certa para acabar
+		if waveStartedRemote then
+			waveStartedRemote:FireAllClients(index, waveCount, wave.boss == true)
+		end
+
+		local waveStart = os.clock()
+		spawnWave(wave)
+
+		-- A proxima onda comeca quando: terminou de spawnar E (todos sumiram OU deu o tempo).
+		-- Na ultima onda esperamos todos sumirem (nao existe "proxima" para adiantar).
+		local isLast = index == waveCount
+		while not BaseService.isDead() do
+			if EnemyService.aliveCount() == 0 then
+				break
+			end
+			if not isLast and os.clock() - waveStart >= Config.WAVE_TIMEOUT_SECONDS then
+				break
+			end
+			task.wait(POLL_SECONDS)
+		end
+
+		if BaseService.isDead() then
+			return "Defeat"
+		end
+	end
+
+	return "Victory"
+end
+
+function MatchService.start()
+	while true do
+		setState("Waiting", 0)
+		waitForPlayers()
+
+		local result = runMatch()
+		endMatch(result)
+		task.wait(Config.RESTART_DELAY_SECONDS)
+
+		-- Reinicia tudo para a proxima partida.
+		EnemyService.clearAll()
+		BaseService.reset()
+		setAttr("Wave", 0)
+		setAttr("EnemiesAlive", 0)
+	end
+end
+
+-- Limpeza explicita das conexoes (nao e chamada no jogo normal).
+function MatchService.destroy()
+	for _, cleanup in cleanups do
+		cleanup()
+	end
+	table.clear(cleanups)
+end
+
+return MatchService
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX00000010">
 					<Properties>
 						<string name="Name">PathPreview</string>
 						<ProtectedString name="Source"><![CDATA[--!strict
@@ -267,16 +1204,23 @@ return PathPreview
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000000B">
+				<Item class="ModuleScript" referent="RBX00000011">
 					<Properties>
 						<string name="Name">PathService</string>
 						<ProtectedString name="Source"><![CDATA[--!strict
 -- PathService: le os waypoints do mapa (Workspace.Map.Waypoints) e guarda a lista.
 -- Os outros sistemas pedem o caminho aqui, em vez de cada um ler o mapa por conta propria.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local PathMath = require(Shared:WaitForChild("Util"):WaitForChild("PathMath"))
+local Types = require(Shared:WaitForChild("Types"))
+
 local PathService = {}
 
 local waypoints: { Vector3 } = {}
+local pathData: Types.PathData? = nil
 
 type Entry = { index: number, position: Vector3 }
 
@@ -310,11 +1254,48 @@ function PathService.init()
 	end
 
 	waypoints = list
+
+	-- Publica os pontos em ReplicatedStorage.PathPoints para os clientes.
+	-- O cliente monta o caminho a partir daqui (o Workspace pode "sumir" com streaming).
+	-- Y = 0: nivel do chao (o inimigo soma o proprio HeightOffset depois).
+	local old = ReplicatedStorage:FindFirstChild("PathPoints")
+	if old then
+		old:Destroy()
+	end
+	local pointsFolder = Instance.new("Folder")
+	pointsFolder.Name = "PathPoints"
+	for i, p in list do
+		local value = Instance.new("Vector3Value")
+		value.Name = tostring(i)
+		value.Value = Vector3.new(p.X, 0, p.Z)
+		value.Parent = pointsFolder
+	end
+	pointsFolder.Parent = ReplicatedStorage
+
+	-- Calcula os dados do caminho uma vez so e guarda (cache).
+	pathData = nil
+	PathService.getPathData()
 end
 
 -- Devolve uma COPIA, assim ninguem estraga a lista original sem querer.
 function PathService.getWaypoints(): { Vector3 }
 	return table.clone(waypoints)
+end
+
+-- Dados prontos do caminho (comprimentos, total) no nivel do chao (Y = 0).
+-- Construido uma vez com PathMath.build; depois so devolve o cache.
+function PathService.getPathData(): Types.PathData
+	local cached = pathData
+	if cached then
+		return cached
+	end
+	local flat: { Vector3 } = {}
+	for i, p in waypoints do
+		flat[i] = Vector3.new(p.X, 0, p.Z)
+	end
+	local built = PathMath.build(flat)
+	pathData = built
+	return built
 end
 
 return PathService
@@ -324,15 +1305,15 @@ return PathService
 			</Item>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX0000000C">
+	<Item class="StarterPlayer" referent="RBX00000012">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX0000000D">
+		<Item class="StarterPlayerScripts" referent="RBX00000013">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX0000000E">
+			<Item class="LocalScript" referent="RBX00000014">
 				<Properties>
 					<string name="Name">Client</string>
 					<ProtectedString name="Source"><![CDATA[--!strict
@@ -361,24 +1342,1209 @@ for _, controller in loaded do
 end
 ]]></ProtectedString>
 				</Properties>
-				<Item class="Folder" referent="RBX0000000F">
+				<Item class="Folder" referent="RBX00000015">
 					<Properties>
 						<string name="Name">Controllers</string>
 					</Properties>
-					<Item class="ModuleScript" referent="RBX00000010">
+					<Item class="ModuleScript" referent="RBX00000016">
+						<Properties>
+							<string name="Name">DebugController</string>
+							<ProtectedString name="Source"><![CDATA[--!strict
+-- DebugController: SO no Studio. Clicar (ou tocar) num inimigo causa dano de teste,
+-- para podermos ver confete e recompensas sem ter torres ainda.
+-- O cliente so manda "cliquei no inimigo X"; o servidor valida e decide o dano.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local Net = require(ReplicatedStorage.Shared.Net)
+
+local RAY_LENGTH = 1000
+local MIN_CLICK_INTERVAL = 0.1 -- no maximo 10 cliques por segundo (o servidor tambem limita)
+
+local DebugController = {}
+
+local connections: { RBXScriptConnection } = {}
+
+function DebugController.init() end
+
+function DebugController.start()
+	-- Fora do Studio este controller nao faz nada (nem cria o remote nem a interface).
+	if not RunService:IsStudio() then
+		return
+	end
+
+	local enemiesInst = workspace:WaitForChild("Enemies", 30)
+	if not enemiesInst then
+		warn("[DebugController] workspace.Enemies nao apareceu em 30s.")
+		return
+	end
+	local enemies: Instance = enemiesInst
+	local hitRemote = Net.event("DebugHitEnemy")
+
+	-- Etiqueta pequena no canto inferior esquerdo.
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "DebugGui"
+	gui.ResetOnSpawn = false
+	gui.Parent = playerGui
+
+	local label = Instance.new("TextLabel")
+	label.AnchorPoint = Vector2.new(0, 1)
+	label.Position = UDim2.fromScale(0.01, 0.99)
+	label.Size = UDim2.fromScale(0.2, 0.035)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBold
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(255, 225, 60)
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Text = "DEBUG: click enemies"
+	label.Parent = gui
+
+	local limit = Instance.new("UITextSizeConstraint")
+	limit.MinTextSize = 12
+	limit.MaxTextSize = 18
+	limit.Parent = label
+
+	-- O raio so enxerga coisas dentro de workspace.Enemies (ignora mapa e jogadores).
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { enemies }
+
+	local lastClick = 0
+
+	table.insert(
+		connections,
+		UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
+			if gameProcessed then
+				return -- clique em botao/interface nao conta
+			end
+			local inputType = input.UserInputType
+			if inputType ~= Enum.UserInputType.MouseButton1 and inputType ~= Enum.UserInputType.Touch then
+				return
+			end
+
+			local now = os.clock()
+			if now - lastClick < MIN_CLICK_INTERVAL then
+				return
+			end
+
+			local camera = workspace.CurrentCamera
+			if not camera then
+				return
+			end
+			-- ScreenPointToRay ja considera a barra superior do Roblox (inset).
+			local ray = camera:ScreenPointToRay(input.Position.X, input.Position.Y)
+			local result = workspace:Raycast(ray.Origin, ray.Direction * RAY_LENGTH, params)
+			if not result then
+				return
+			end
+
+			local model = result.Instance:FindFirstAncestorOfClass("Model")
+			if model and model.Parent == enemies then
+				lastClick = now
+				hitRemote:FireServer(model.Name)
+			end
+		end)
+	)
+end
+
+function DebugController.destroy()
+	for _, connection in connections do
+		connection:Disconnect()
+	end
+	table.clear(connections)
+end
+
+return DebugController
+]]></ProtectedString>
+						</Properties>
+					</Item>
+					<Item class="ModuleScript" referent="RBX00000017">
+						<Properties>
+							<string name="Name">EnemyRenderer</string>
+							<ProtectedString name="Source"><![CDATA[--!strict
+-- EnemyRenderer: move os inimigos NA TELA de cada jogador.
+-- O servidor nao move inimigos todo frame. Cada inimigo guarda BaseDistance, BaseTime e Speed,
+-- e a distancia agora e: BaseDistance + Speed * (agora - BaseTime).
+-- Aqui, todo frame, calculamos isso e movemos a copia local do modelo com PivotTo.
+-- Tambem desenhamos a barra de vida e um flash branco quando o inimigo leva dano.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local Types = require(ReplicatedStorage.Shared.Types)
+local PathMath = require(ReplicatedStorage.Shared.Util.PathMath)
+local EnemyMath = require(ReplicatedStorage.Shared.Util.EnemyMath)
+
+local BOB_SPEED = 6 -- velocidade do balanco (radianos por segundo)
+local BOB_HEIGHT = 0.35 -- altura do balanco em studs
+local BAR_COLOR_LOW = Color3.fromRGB(255, 50, 70)
+local BAR_COLOR_HIGH = Color3.fromRGB(120, 255, 90)
+local BAR_BACK_COLOR = Color3.fromRGB(20, 12, 40)
+local FILL_INFO = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local FLASH_INFO = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+-- Tudo que sabemos de um inimigo fica numa tabela so (evita procurar atributos todo frame).
+type Entry = {
+	model: Model,
+	root: BasePart?,
+	baseDistance: number,
+	baseTime: number,
+	speed: number,
+	heightOffset: number,
+	phase: number, -- cada inimigo balanca em um ritmo diferente
+	health: number,
+	maxHealth: number,
+	billboard: BillboardGui?,
+	fill: Frame?,
+	highlight: Highlight?,
+	flashTween: Tween?,
+	fillTween: Tween?,
+	connections: { RBXScriptConnection },
+	alive: boolean,
+}
+
+local EnemyRenderer = {}
+
+local entries: { [Model]: Entry } = {}
+local pathData: Types.PathData? = nil
+local globalConnections: { RBXScriptConnection } = {}
+
+local function getNumber(inst: Instance, name: string, default: number): number
+	local value = inst:GetAttribute(name)
+	if typeof(value) == "number" then
+		return value
+	end
+	return default
+end
+
+local function readMotion(entry: Entry)
+	local model = entry.model
+	entry.baseDistance = getNumber(model, "BaseDistance", 0)
+	entry.baseTime = getNumber(model, "BaseTime", workspace:GetServerTimeNow())
+	entry.speed = getNumber(model, "Speed", 0)
+	entry.heightOffset = getNumber(model, "HeightOffset", 0)
+end
+
+-- Cria o flash branco (Highlight) so na primeira vez que o inimigo leva dano.
+local function flash(entry: Entry)
+	local highlight = entry.highlight
+	if not highlight then
+		local created = Instance.new("Highlight")
+		created.Name = "HitFlash"
+		created.Adornee = entry.model
+		created.FillColor = Color3.new(1, 1, 1)
+		created.FillTransparency = 1
+		created.OutlineTransparency = 1
+		created.Enabled = false
+		created.Parent = entry.model
+		entry.highlight = created
+		highlight = created
+	end
+
+	local old = entry.flashTween
+	if old then
+		old:Cancel()
+	end
+	highlight.Enabled = true
+	highlight.FillTransparency = 0.15
+	local tween = TweenService:Create(highlight, FLASH_INFO, { FillTransparency = 1 })
+	entry.flashTween = tween
+	local shown = highlight
+	tween.Completed:Once(function()
+		-- So desliga se ainda for o nosso tween (outro flash pode ter comecado).
+		if entry.alive and entry.flashTween == tween then
+			shown.Enabled = false
+		end
+	end)
+	tween:Play()
+end
+
+local function updateHealth(entry: Entry, animate: boolean)
+	local newHealth = getNumber(entry.model, "Health", entry.health)
+	local maxHealth = math.max(1, getNumber(entry.model, "MaxHealth", entry.maxHealth))
+	local tookDamage = newHealth < entry.health
+	entry.health = newHealth
+	entry.maxHealth = maxHealth
+
+	local ratio = math.clamp(newHealth / maxHealth, 0, 1)
+	local billboard = entry.billboard
+	local fill = entry.fill
+	if billboard and fill then
+		-- A barra so aparece depois do primeiro dano (menos coisa na tela).
+		billboard.Enabled = ratio < 1 and ratio > 0
+		local goal = {
+			Size = UDim2.fromScale(ratio, 1),
+			BackgroundColor3 = BAR_COLOR_LOW:Lerp(BAR_COLOR_HIGH, ratio),
+		}
+		local old = entry.fillTween
+		if old then
+			old:Cancel()
+		end
+		if animate then
+			local tween = TweenService:Create(fill, FILL_INFO, goal)
+			entry.fillTween = tween
+			tween:Play()
+		else
+			fill.Size = goal.Size
+			fill.BackgroundColor3 = goal.BackgroundColor3
+		end
+	end
+
+	if tookDamage and animate then
+		flash(entry)
+	end
+end
+
+-- Monta a barra de vida (BillboardGui) em cima do inimigo. Tamanho em studs (Scale).
+local function buildBar(entry: Entry, root: BasePart)
+	local width = math.clamp(root.Size.X * 1.3, 3, 8)
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "HealthBar"
+	billboard.Adornee = root
+	billboard.Size = UDim2.fromScale(width, 0.55)
+	billboard.StudsOffsetWorldSpace = Vector3.new(0, root.Size.Y / 2 + 1.5, 0)
+	billboard.MaxDistance = 120 -- longe demais nao precisa desenhar
+	billboard.AlwaysOnTop = false
+	billboard.Active = false
+	billboard.Enabled = false
+	billboard.Parent = root
+
+	local back = Instance.new("Frame")
+	back.Size = UDim2.fromScale(1, 1)
+	back.BackgroundColor3 = BAR_BACK_COLOR
+	back.BorderSizePixel = 0
+	back.Parent = billboard
+
+	local backCorner = Instance.new("UICorner")
+	backCorner.CornerRadius = UDim.new(0.5, 0)
+	backCorner.Parent = back
+
+	local backStroke = Instance.new("UIStroke")
+	backStroke.Color = Color3.new(1, 1, 1)
+	backStroke.Thickness = 1
+	backStroke.Parent = back
+
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.Size = UDim2.fromScale(1, 1)
+	fill.BackgroundColor3 = BAR_COLOR_HIGH
+	fill.BorderSizePixel = 0
+	fill.Parent = back
+
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(0.5, 0)
+	fillCorner.Parent = fill
+
+	entry.billboard = billboard
+	entry.fill = fill
+	updateHealth(entry, false)
+end
+
+local function track(model: Model)
+	if entries[model] then
+		return
+	end
+
+	local entry: Entry = {
+		model = model,
+		root = nil,
+		baseDistance = 0,
+		baseTime = workspace:GetServerTimeNow(),
+		speed = 0,
+		heightOffset = 0,
+		phase = math.random() * math.pi * 2,
+		health = getNumber(model, "Health", 1),
+		maxHealth = getNumber(model, "MaxHealth", 1),
+		billboard = nil,
+		fill = nil,
+		highlight = nil,
+		flashTween = nil,
+		fillTween = nil,
+		connections = {},
+		alive = true,
+	}
+	entries[model] = entry
+	readMotion(entry)
+
+	-- Um unico listener de atributos por inimigo: vida OU movimento (ex.: lentidao = "rebase").
+	table.insert(
+		entry.connections,
+		model.AttributeChanged:Connect(function(name: string)
+			if name == "Health" or name == "MaxHealth" then
+				updateHealth(entry, true)
+			else
+				readMotion(entry)
+			end
+		end)
+	)
+
+	-- O Root pode demorar para chegar (streaming), entao esperamos sem travar o resto.
+	task.spawn(function()
+		local rootInst = model:WaitForChild("Root", 10)
+		if not entry.alive then
+			return
+		end
+		if rootInst and rootInst:IsA("BasePart") then
+			entry.root = rootInst
+			buildBar(entry, rootInst)
+		end
+	end)
+end
+
+local function untrack(model: Model)
+	local entry = entries[model]
+	if not entry then
+		return
+	end
+	entry.alive = false
+	entries[model] = nil
+
+	for _, connection in entry.connections do
+		connection:Disconnect()
+	end
+	table.clear(entry.connections)
+
+	if entry.flashTween then
+		entry.flashTween:Cancel()
+	end
+	if entry.fillTween then
+		entry.fillTween:Cancel()
+	end
+	-- O modelo pode so ter saido do streaming (nao destruido): limpamos o que criamos.
+	if entry.billboard then
+		entry.billboard:Destroy()
+	end
+	if entry.highlight then
+		entry.highlight:Destroy()
+	end
+end
+
+-- Roda todo frame. Nada de criar tabelas aqui (so numeros e Vector3/CFrame).
+local function onRenderStep()
+	local data = pathData
+	if not data then
+		return
+	end
+	local now = workspace:GetServerTimeNow()
+	local clock = os.clock()
+	for _, entry in entries do
+		if entry.root then
+			local distance = EnemyMath.distanceAt(entry.baseDistance, entry.baseTime, entry.speed, now)
+			local bob = math.sin(clock * BOB_SPEED + entry.phase) * BOB_HEIGHT
+			local position = PathMath.positionAt(data, distance) + Vector3.new(0, entry.heightOffset + bob, 0)
+			local direction = PathMath.directionAt(data, distance)
+			entry.model:PivotTo(CFrame.lookAt(position, position + direction))
+		end
+	end
+end
+
+function EnemyRenderer.init() end
+
+function EnemyRenderer.start()
+	-- 1) Caminho: montado a partir da pasta replicada (nunca do workspace, que pode "sumir").
+	local pointsFolder = ReplicatedStorage:WaitForChild("PathPoints", 30)
+	if not pointsFolder then
+		warn("[EnemyRenderer] PathPoints nao apareceu em 30s.")
+		return
+	end
+
+	local indexed: { { index: number, position: Vector3 } } = {}
+	for _, child in pointsFolder:GetChildren() do
+		local index = tonumber(child.Name)
+		if index and child:IsA("Vector3Value") then
+			table.insert(indexed, { index = index, position = child.Value })
+		end
+	end
+	table.sort(indexed, function(a, b)
+		return a.index < b.index
+	end)
+	local points: { Vector3 } = {}
+	for _, item in indexed do
+		table.insert(points, item.position)
+	end
+	if #points < 2 then
+		warn("[EnemyRenderer] caminho com menos de 2 pontos.")
+		return
+	end
+	pathData = PathMath.build(points)
+
+	-- 2) Inimigos: os que ja existem + os que chegarem/sairem depois.
+	local enemiesInst = workspace:WaitForChild("Enemies", 30)
+	if not enemiesInst then
+		warn("[EnemyRenderer] workspace.Enemies nao apareceu em 30s.")
+		return
+	end
+
+	table.insert(
+		globalConnections,
+		enemiesInst.ChildAdded:Connect(function(child: Instance)
+			if child:IsA("Model") then
+				track(child)
+			end
+		end)
+	)
+	table.insert(
+		globalConnections,
+		enemiesInst.ChildRemoved:Connect(function(child: Instance)
+			if child:IsA("Model") then
+				untrack(child)
+			end
+		end)
+	)
+	for _, child in enemiesInst:GetChildren() do
+		if child:IsA("Model") then
+			track(child)
+		end
+	end
+
+	table.insert(globalConnections, RunService.RenderStepped:Connect(onRenderStep))
+end
+
+-- Desliga tudo (nao usado no jogo normal, mas deixa a limpeza explicita).
+function EnemyRenderer.destroy()
+	for _, connection in globalConnections do
+		connection:Disconnect()
+	end
+	table.clear(globalConnections)
+	for model in entries do
+		untrack(model)
+	end
+end
+
+return EnemyRenderer
+]]></ProtectedString>
+						</Properties>
+					</Item>
+					<Item class="ModuleScript" referent="RBX00000018">
+						<Properties>
+							<string name="Name">FxController</string>
+							<ProtectedString name="Source"><![CDATA[--!strict
+-- FxController: o "suco" do jogo! Confete, numeros flutuantes, banners, tremor de camera.
+-- Tudo roda so no cliente e so DESENHA: quem decide o que aconteceu e o servidor (via remotes).
+-- Para ficar leve no celular: usamos POOLS (objetos criados uma vez e reaproveitados),
+-- limites de quantidade e nada de criar objetos a cada frame.
+
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+
+local Net = require(ReplicatedStorage.Shared.Net)
+
+-- Paleta neon (rosa, ciano, amarelo, lima, roxo).
+local PALETTE: { Color3 } = {
+	Color3.fromRGB(255, 51, 153),
+	Color3.fromRGB(0, 240, 255),
+	Color3.fromRGB(255, 225, 60),
+	Color3.fromRGB(120, 255, 90),
+	Color3.fromRGB(170, 80, 255),
+}
+local RED = Color3.fromRGB(255, 50, 70)
+local GOLD = Color3.fromRGB(255, 200, 40)
+local DARK = Color3.fromRGB(20, 12, 40)
+
+-- Limites e ajustes (mexa aqui para deixar mais ou menos intenso).
+local BURST_POOL_SIZE = 8 -- explosoes de confete ao mesmo tempo
+local LEAK_POOL_SIZE = 4
+local NUMBER_POOL_SIZE = 20 -- numeros flutuantes ao mesmo tempo (limite do spec)
+local CONFETTI_PER_COLOR = 6 -- 5 cores x 6 = 30 pedacinhos por explosao
+local VICTORY_PIECES = 50
+local SOUND_ENABLED = true
+local SOUND_ID = "rbxasset://sounds/electronicpingshort.wav"
+local SHAKE_BIND_NAME = "TokyoBurstCameraShake"
+
+-- Animacoes reaproveitadas.
+local POP_IN = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local NUMBER_POP = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local NUMBER_RISE = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local NUMBER_FADE = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.5)
+local BANNER_FADE = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+local FLASH_FADE = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local LIGHT_FADE = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local GRADE_INFO = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+type BurstSlot = {
+	part: Part,
+	emitters: { ParticleEmitter },
+	light: PointLight,
+	lightTween: Tween?,
+}
+
+type NumberSlot = {
+	part: Part,
+	gui: BillboardGui,
+	label: TextLabel,
+	scale: UIScale,
+	stroke: UIStroke,
+	token: number, -- sobe a cada uso; tweens antigos conferem o token antes de agir
+	tweens: { Tween },
+}
+
+local FxController = {}
+
+local connections: { RBXScriptConnection } = {}
+
+local fxFolder: Folder? = nil
+local burstSlots: { BurstSlot } = {}
+local leakSlots: { BurstSlot } = {}
+local numberSlots: { NumberSlot } = {}
+local nextBurst = 1
+local nextLeak = 1
+local nextNumber = 1
+
+local flashFrame: Frame? = nil
+local flashTween: Tween? = nil
+
+local bannerLabel: TextLabel? = nil
+local bannerStroke: UIStroke? = nil
+local bannerScale: UIScale? = nil
+local bannerTweens: { Tween } = {}
+local bannerToken = 0
+
+local victoryHolder: Frame? = nil
+local victoryPieces: { Frame } = {}
+local victoryTokens: { number } = {}
+
+local gradeEffect: ColorCorrectionEffect? = nil
+local gradeTween: Tween? = nil
+
+local pingSound: Sound? = nil
+
+-- Tremor de camera (estado simples, sem tabelas).
+local shakeTime = 0
+local shakeDuration = 0.4
+local shakeMagnitude = 0
+local shakeBound = false
+
+local function cancelAll(tweens: { Tween })
+	for _, tween in tweens do
+		tween:Cancel()
+	end
+	table.clear(tweens)
+end
+
+local function randomColor(): Color3
+	return PALETTE[math.random(1, #PALETTE)]
+end
+
+local function playPing(volume: number, minSpeed: number, maxSpeed: number)
+	local sound = pingSound
+	if not SOUND_ENABLED or not sound then
+		return
+	end
+	sound.Volume = volume
+	sound.PlaybackSpeed = minSpeed + math.random() * (maxSpeed - minSpeed) -- varia o tom para nao cansar
+	sound:Play()
+end
+
+-- ---------------------------------------------------------------------------
+-- Confete 3D (pool de Parts com ParticleEmitters)
+-- ---------------------------------------------------------------------------
+
+local function makeBurstSlot(folder: Folder, colors: { Color3 }, speedMax: number, sizeMax: number): BurstSlot
+	-- ParticleEmitter precisa de um Part "normal" (invisivel e sem colisao).
+	local part = Instance.new("Part")
+	part.Name = "BurstSlot"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.Size = Vector3.one * 0.2
+	part.Position = Vector3.new(0, -500, 0) -- guardado longe ate ser usado
+	part.Parent = folder
+
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = part
+
+	local emitters: { ParticleEmitter } = {}
+	for i, color in colors do
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Enabled = false -- so solta particulas quando chamamos :Emit()
+		emitter.Rate = 0
+		emitter.Lifetime = NumberRange.new(0.6, 1.2)
+		emitter.Speed = NumberRange.new(speedMax * 0.4, speedMax)
+		emitter.SpreadAngle = Vector2.new(360, 360)
+		emitter.Acceleration = Vector3.new(0, -60, 0)
+		emitter.Drag = 2
+		emitter.Rotation = NumberRange.new(0, 360)
+		emitter.RotSpeed = NumberRange.new(-300, 300)
+		emitter.LightEmission = 0.6
+		emitter.LightInfluence = 0
+		emitter.Size = NumberSequence.new(sizeMax, 0)
+		emitter.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.7, 0),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		-- Gradiente da cor para a proxima cor da paleta: cada pedacinho muda de cor ao cair.
+		emitter.Color = ColorSequence.new(color, colors[i % #colors + 1])
+		emitter.Parent = attachment
+		table.insert(emitters, emitter)
+	end
+
+	-- Um brilho rapido de luz (so 1 PointLight por slot, sem sombras: barato).
+	local light = Instance.new("PointLight")
+	light.Range = 12
+	light.Brightness = 0
+	light.Shadows = false
+	light.Parent = part
+
+	return { part = part, emitters = emitters, light = light, lightTween = nil }
+end
+
+local function burst(slots: { BurstSlot }, index: number, position: Vector3, perColor: number, lightColor: Color3)
+	local slot = slots[index]
+	slot.part.Position = position
+	for _, emitter in slot.emitters do
+		emitter:Emit(perColor)
+	end
+	local old = slot.lightTween
+	if old then
+		old:Cancel()
+	end
+	slot.light.Color = lightColor
+	slot.light.Brightness = 4
+	local tween = TweenService:Create(slot.light, LIGHT_FADE, { Brightness = 0 })
+	slot.lightTween = tween
+	tween:Play()
+end
+
+-- ---------------------------------------------------------------------------
+-- Numeros flutuantes (pool de BillboardGuis)
+-- ---------------------------------------------------------------------------
+
+local function makeNumberSlot(folder: Folder): NumberSlot
+	local part = Instance.new("Part")
+	part.Name = "NumberSlot"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.Size = Vector3.one * 0.2
+	part.Position = Vector3.new(0, -500, 0)
+	part.Parent = folder
+
+	local gui = Instance.new("BillboardGui")
+	gui.Adornee = part
+	gui.Size = UDim2.fromScale(5, 2) -- em studs
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = 200
+	gui.Active = false
+	gui.Enabled = false
+	gui.Parent = part
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.Text = ""
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Parent = gui
+
+	local limit = Instance.new("UITextSizeConstraint")
+	limit.MinTextSize = 12
+	limit.MaxTextSize = 60
+	limit.Parent = label
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = DARK
+	stroke.Thickness = 3
+	stroke.Parent = label
+
+	local scale = Instance.new("UIScale")
+	scale.Parent = label
+
+	return { part = part, gui = gui, label = label, scale = scale, stroke = stroke, token = 0, tweens = {} }
+end
+
+local function showNumber(position: Vector3, text: string)
+	local slot = numberSlots[nextNumber]
+	nextNumber = nextNumber % #numberSlots + 1 -- se todos estao em uso, reaproveita o mais antigo
+
+	slot.token += 1
+	local myToken = slot.token
+	cancelAll(slot.tweens)
+
+	slot.part.Position = position + Vector3.new((math.random() - 0.5) * 3, 1, (math.random() - 0.5) * 3)
+	slot.gui.StudsOffsetWorldSpace = Vector3.new(0, 2, 0)
+	slot.label.Text = text
+	slot.label.TextColor3 = randomColor()
+	slot.label.TextTransparency = 0
+	slot.stroke.Transparency = 0
+	slot.scale.Scale = 0.2
+	slot.gui.Enabled = true
+
+	local pop = TweenService:Create(slot.scale, NUMBER_POP, { Scale = 1.2 })
+	local rise = TweenService:Create(slot.gui, NUMBER_RISE, { StudsOffsetWorldSpace = Vector3.new(0, 6, 0) })
+	local fadeText = TweenService:Create(slot.label, NUMBER_FADE, { TextTransparency = 1 })
+	local fadeStroke = TweenService:Create(slot.stroke, NUMBER_FADE, { Transparency = 1 })
+	table.insert(slot.tweens, pop)
+	table.insert(slot.tweens, rise)
+	table.insert(slot.tweens, fadeText)
+	table.insert(slot.tweens, fadeStroke)
+
+	fadeText.Completed:Once(function()
+		if slot.token == myToken then
+			slot.gui.Enabled = false
+		end
+	end)
+	pop:Play()
+	rise:Play()
+	fadeText:Play()
+	fadeStroke:Play()
+end
+
+-- ---------------------------------------------------------------------------
+-- Tremor de camera
+-- ---------------------------------------------------------------------------
+
+local function stopShake()
+	if shakeBound then
+		shakeBound = false
+		RunService:UnbindFromRenderStep(SHAKE_BIND_NAME)
+	end
+end
+
+local function onShakeStep(dt: number)
+	shakeTime += dt
+	local alpha = 1 - shakeTime / shakeDuration
+	if alpha <= 0 then
+		-- Acabou: desliga o passo de render para nunca brigar com a camera.
+		stopShake()
+		return
+	end
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	local magnitude = shakeMagnitude * alpha * alpha -- vai diminuindo rapido
+	local offsetX = (math.random() - 0.5) * 2 * magnitude
+	local offsetY = (math.random() - 0.5) * 2 * magnitude
+	local roll = (math.random() - 0.5) * 0.04 * alpha
+	-- Deslocamento em cima da camera padrao, que se recalcula todo frame (nao acumula).
+	camera.CFrame = camera.CFrame * CFrame.new(offsetX, offsetY, 0) * CFrame.Angles(0, 0, roll)
+end
+
+local function startShake(magnitude: number, duration: number)
+	shakeTime = 0
+	shakeDuration = duration
+	shakeMagnitude = magnitude
+	if not shakeBound then
+		shakeBound = true
+		-- Prioridade logo DEPOIS da camera: ela calcula primeiro, nos deslocamos depois.
+		RunService:BindToRenderStep(SHAKE_BIND_NAME, Enum.RenderPriority.Camera.Value + 1, onShakeStep)
+	end
+end
+
+-- ---------------------------------------------------------------------------
+-- Flash vermelho, banner e confete de UI
+-- ---------------------------------------------------------------------------
+
+local function redFlash()
+	local frame = flashFrame
+	if not frame then
+		return
+	end
+	local old = flashTween
+	if old then
+		old:Cancel()
+	end
+	frame.BackgroundTransparency = 0.55
+	local tween = TweenService:Create(frame, FLASH_FADE, { BackgroundTransparency = 1 })
+	flashTween = tween
+	tween:Play()
+end
+
+local function showBanner(text: string, fill: Color3, outline: Color3, hold: number)
+	local label = bannerLabel
+	local stroke = bannerStroke
+	local scale = bannerScale
+	if not label or not stroke or not scale then
+		return
+	end
+
+	bannerToken += 1
+	local myToken = bannerToken
+	cancelAll(bannerTweens)
+
+	label.Text = text
+	label.TextColor3 = fill
+	label.TextTransparency = 0
+	stroke.Color = outline
+	stroke.Transparency = 0
+	scale.Scale = 0
+	label.Visible = true
+
+	-- Entra com "pop" (Back passa um pouco do tamanho e volta).
+	local pop = TweenService:Create(scale, POP_IN, { Scale = 1 })
+	table.insert(bannerTweens, pop)
+	pop:Play()
+
+	-- Depois de um tempo, some. Se outro banner chegar antes, o token mudou e nada acontece.
+	task.delay(hold, function()
+		if bannerToken ~= myToken then
+			return
+		end
+		local fadeText = TweenService:Create(label, BANNER_FADE, { TextTransparency = 1 })
+		local fadeStroke = TweenService:Create(stroke, BANNER_FADE, { Transparency = 1 })
+		table.insert(bannerTweens, fadeText)
+		table.insert(bannerTweens, fadeStroke)
+		fadeText.Completed:Once(function()
+			if bannerToken == myToken then
+				label.Visible = false
+			end
+		end)
+		fadeText:Play()
+		fadeStroke:Play()
+	end)
+end
+
+local function launchVictoryConfetti()
+	local holder = victoryHolder
+	if not holder then
+		return
+	end
+	-- Cria os pedacinhos so na primeira vitoria; depois reaproveita os mesmos.
+	if #victoryPieces == 0 then
+		for i = 1, VICTORY_PIECES do
+			local piece = Instance.new("Frame")
+			piece.Name = "Piece"
+			piece.Size = UDim2.fromScale(0.012, 0.022)
+			piece.BorderSizePixel = 0
+			piece.Visible = false
+			piece.Parent = holder
+			victoryPieces[i] = piece
+			victoryTokens[i] = 0
+		end
+	end
+
+	for i, piece in victoryPieces do
+		victoryTokens[i] += 1
+		local myToken = victoryTokens[i]
+		local startX = math.random()
+		local startRotation = math.random(0, 360)
+		piece.BackgroundColor3 = randomColor()
+		piece.Position = UDim2.fromScale(startX, -0.08)
+		piece.Rotation = startRotation
+		piece.Visible = true
+
+		-- DelayTime escalona a queda sem precisar de task.delay.
+		local info = TweenInfo.new(2.2 + math.random() * 1.8, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 0, false, math.random() * 0.9)
+		local tween = TweenService:Create(piece, info, {
+			Position = UDim2.fromScale(startX + (math.random() - 0.5) * 0.3, 1.08),
+			Rotation = startRotation + math.random(-720, 720),
+		})
+		tween.Completed:Once(function()
+			if victoryTokens[i] == myToken then
+				piece.Visible = false
+			end
+		end)
+		tween:Play()
+	end
+end
+
+-- Cor da tela (ColorCorrection local): cinza na derrota, normal nas outras fases.
+local function setGrade(saturation: number, brightness: number)
+	local effect = gradeEffect
+	if not effect then
+		return
+	end
+	local old = gradeTween
+	if old then
+		old:Cancel()
+	end
+	local tween = TweenService:Create(effect, GRADE_INFO, { Saturation = saturation, Brightness = brightness })
+	gradeTween = tween
+	tween:Play()
+end
+
+-- ---------------------------------------------------------------------------
+-- Eventos do servidor
+-- ---------------------------------------------------------------------------
+
+local function onEnemyDied(id: string, reason: string, position: Vector3, reward: number)
+	if typeof(position) ~= "Vector3" then
+		return
+	end
+	if reason == "Killed" then
+		burst(burstSlots, nextBurst, position, CONFETTI_PER_COLOR, PALETTE[math.random(1, #PALETTE)])
+		nextBurst = nextBurst % #burstSlots + 1
+		showNumber(position, "+" .. tostring(reward))
+		playPing(0.25, 1.2, 1.8)
+	else
+		-- Vazou: explosao vermelha pequena.
+		burst(leakSlots, nextLeak, position, 5, RED)
+		nextLeak = nextLeak % #leakSlots + 1
+		playPing(0.2, 0.6, 0.8)
+	end
+end
+
+local function onBaseHit(damage: number, _healthLeft: number)
+	-- Quanto maior o dano, mais forte o tremor (com limites).
+	local magnitude = math.clamp(0.4 + damage * 0.05, 0.4, 2)
+	startShake(magnitude, 0.45)
+	redFlash()
+	playPing(0.3, 0.4, 0.55)
+end
+
+local function onWaveStarted(wave: number, _waveCount: number, isBoss: boolean)
+	if isBoss then
+		showBanner("BOSS WAVE!", RED, GOLD, 2)
+	else
+		showBanner("WAVE " .. tostring(wave), Color3.new(1, 1, 1), PALETTE[1], 1.4)
+	end
+	playPing(0.25, 0.9, 1.1)
+end
+
+local function onMatchEnded(result: string)
+	if result == "Victory" then
+		showBanner("VICTORY!", GOLD, PALETTE[1], 3.5)
+		launchVictoryConfetti()
+		playPing(0.3, 1.4, 1.6)
+	else
+		showBanner("DEFEAT", Color3.fromRGB(190, 190, 200), DARK, 3.5)
+		setGrade(-0.85, -0.05)
+	end
+end
+
+local function makeLabelBase(parent: Instance): (TextLabel, UIStroke, UIScale)
+	local label = Instance.new("TextLabel")
+	label.Name = "Banner"
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	label.Position = UDim2.fromScale(0.5, 0.35)
+	label.Size = UDim2.fromScale(0.6, 0.16)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.Text = ""
+	label.ZIndex = 10 -- acima do confete e do flash
+	label.Visible = false
+	label.Parent = parent
+
+	local limit = Instance.new("UITextSizeConstraint")
+	limit.MinTextSize = 14
+	limit.MaxTextSize = 110
+	limit.Parent = label
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 5
+	stroke.Parent = label
+
+	local scale = Instance.new("UIScale")
+	scale.Parent = label
+
+	return label, stroke, scale
+end
+
+function FxController.init() end
+
+function FxController.start()
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+	-- Pasta local no workspace para as pecas dos efeitos (so este jogador ve).
+	local folder = Instance.new("Folder")
+	folder.Name = "ClientFx"
+	folder.Parent = workspace
+	fxFolder = folder
+
+	for _ = 1, BURST_POOL_SIZE do
+		table.insert(burstSlots, makeBurstSlot(folder, PALETTE, 45, 0.7))
+	end
+	local leakColors: { Color3 } = { RED, Color3.fromRGB(255, 140, 40) }
+	for _ = 1, LEAK_POOL_SIZE do
+		table.insert(leakSlots, makeBurstSlot(folder, leakColors, 25, 0.5))
+	end
+	for _ = 1, NUMBER_POOL_SIZE do
+		table.insert(numberSlots, makeNumberSlot(folder))
+	end
+
+	-- Interface dos efeitos: tela cheia (IgnoreGuiInset) para o flash cobrir tudo.
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "Fx"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.DisplayOrder = 10
+	gui.Parent = playerGui
+
+	local flash = Instance.new("Frame")
+	flash.Name = "RedFlash"
+	flash.Size = UDim2.fromScale(1, 1)
+	flash.BackgroundColor3 = RED
+	flash.BackgroundTransparency = 1
+	flash.BorderSizePixel = 0
+	flash.Active = false
+	flash.ZIndex = 1
+	flash.Parent = gui
+	flashFrame = flash
+
+	local holder = Instance.new("Frame")
+	holder.Name = "VictoryConfetti"
+	holder.Size = UDim2.fromScale(1, 1)
+	holder.BackgroundTransparency = 1
+	holder.Active = false
+	holder.ZIndex = 5
+	holder.Parent = gui
+	victoryHolder = holder
+
+	bannerLabel, bannerStroke, bannerScale = makeLabelBase(gui)
+
+	local grade = Instance.new("ColorCorrectionEffect")
+	grade.Name = "TokyoBurstGrade"
+	grade.Parent = Lighting
+	gradeEffect = grade
+
+	if SOUND_ENABLED then
+		local sound = Instance.new("Sound")
+		sound.Name = "FxPing"
+		sound.SoundId = SOUND_ID
+		sound.Volume = 0.25
+		sound.Parent = SoundService
+		pingSound = sound
+	end
+
+	-- Remotes: Net.event espera o servidor criar (tempo limite dentro do Net).
+	table.insert(connections, Net.event("EnemyDied").OnClientEvent:Connect(onEnemyDied))
+	table.insert(connections, Net.event("BaseHit").OnClientEvent:Connect(onBaseHit))
+	table.insert(connections, Net.event("WaveStarted").OnClientEvent:Connect(onWaveStarted))
+	table.insert(connections, Net.event("MatchEnded").OnClientEvent:Connect(onMatchEnded))
+
+	-- Sai do modo cinza assim que a partida deixa o estado Defeat (ex.: reiniciou).
+	local matchState = ReplicatedStorage:WaitForChild("MatchState", 30)
+	if matchState then
+		table.insert(
+			connections,
+			matchState:GetAttributeChangedSignal("State"):Connect(function()
+				if matchState:GetAttribute("State") ~= "Defeat" then
+					setGrade(0, 0)
+				end
+			end)
+		)
+	end
+end
+
+-- Limpeza explicita (nao usada no jogo normal): desliga tudo e solta a camera.
+function FxController.destroy()
+	stopShake()
+	for _, connection in connections do
+		connection:Disconnect()
+	end
+	table.clear(connections)
+	if fxFolder then
+		fxFolder:Destroy()
+	end
+	if gradeEffect then
+		gradeEffect:Destroy()
+	end
+end
+
+return FxController
+]]></ProtectedString>
+						</Properties>
+					</Item>
+					<Item class="ModuleScript" referent="RBX00000019">
 						<Properties>
 							<string name="Name">HudController</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
--- HudController: cria o HUD (interface) simples: titulo e etiqueta de versao.
+-- HudController: o HUD (interface) do jogo: titulo, onda, estado/contagem e vida da base.
 -- Tudo em Scale (porcentagem da tela) para funcionar em celular e PC.
+-- O HUD so MOSTRA o que o servidor diz (atributos da pasta MatchState). Ele nunca decide nada.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local PINK = Color3.fromRGB(255, 51, 153)
 local CYAN = Color3.fromRGB(0, 240, 255)
+local YELLOW = Color3.fromRGB(255, 225, 60)
+local LIME = Color3.fromRGB(120, 255, 90)
+local RED = Color3.fromRGB(255, 50, 70)
+local DARK = Color3.fromRGB(20, 12, 40)
+
+-- Animacoes reaproveitadas (criar TweenInfo uma vez so).
+local POP_INFO = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local FILL_INFO = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+-- A contagem regressiva so precisa atualizar 10 vezes por segundo.
+local COUNTDOWN_INTERVAL = 0.1
+-- Abaixo dessa fracao de vida a barra fica vermelha.
+local LOW_HEALTH_RATIO = 0.3
 
 local HudController = {}
+
+local connections: { RBXScriptConnection } = {}
+local popTweens: { [UIScale]: Tween } = {}
+
+-- Le um atributo numero com valor padrao (atributo pode ainda nao existir).
+local function getNumber(inst: Instance, name: string, default: number): number
+	local value = inst:GetAttribute(name)
+	if typeof(value) == "number" then
+		return value
+	end
+	return default
+end
+
+-- "Pop": o elemento comeca maior e volta ao normal com easing Back (efeito elastico).
+local function popScale(uiScale: UIScale, from: number)
+	local old = popTweens[uiScale]
+	if old then
+		old:Cancel() -- evita dois tweens brigando pela mesma propriedade
+	end
+	uiScale.Scale = from
+	local tween = TweenService:Create(uiScale, POP_INFO, { Scale = 1 })
+	popTweens[uiScale] = tween
+	tween:Play()
+end
+
+-- Cria um texto padrao do HUD: escala com a tela, com limites e contorno para ler bem.
+local function makeLabel(
+	parent: Instance,
+	name: string,
+	position: UDim2,
+	size: UDim2,
+	text: string,
+	color: Color3,
+	minSize: number,
+	maxSize: number
+): TextLabel
+	local label = Instance.new("TextLabel")
+	label.Name = name
+	label.AnchorPoint = Vector2.new(0.5, 0)
+	label.Position = position
+	label.Size = size
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true -- o texto se ajusta ao tamanho da caixa
+	label.TextColor3 = color
+	label.Parent = parent
+
+	-- Limites: o texto nao fica minusculo no celular nem gigante no PC.
+	local limit = Instance.new("UITextSizeConstraint")
+	limit.MinTextSize = minSize
+	limit.MaxTextSize = maxSize
+	limit.Parent = label
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = DARK
+	stroke.Thickness = 2
+	stroke.Parent = label
+
+	return label
+end
 
 function HudController.init() end
 
@@ -391,54 +2557,265 @@ function HudController.start()
 	gui.IgnoreGuiInset = false -- respeita a barra superior do Roblox
 	gui.Parent = playerGui
 
-	-- Titulo no topo, centro da tela.
-	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.AnchorPoint = Vector2.new(0.5, 0)
-	title.Position = UDim2.fromScale(0.5, 0.01)
-	title.Size = UDim2.fromScale(0.45, 0.07)
-	title.BackgroundTransparency = 1
-	title.Text = "TOKYO BURST TD"
-	title.Font = Enum.Font.GothamBlack
-	title.TextScaled = true -- o texto se ajusta ao tamanho da caixa
-	title.TextColor3 = CYAN
-	title.Parent = gui
+	-- Titulo pequeno no canto superior esquerdo (o centro fica para a onda e a vida).
+	local title = makeLabel(
+		gui,
+		"Title",
+		UDim2.fromScale(0.01, 0.01),
+		UDim2.fromScale(0.2, 0.04),
+		"TOKYO BURST TD",
+		CYAN,
+		12,
+		26
+	)
+	title.AnchorPoint = Vector2.new(0, 0)
+	local titleStroke = title:FindFirstChildOfClass("UIStroke")
+	if titleStroke then
+		titleStroke.Color = PINK
+		-- Pulso: um Tween so, repetindo para sempre. Bem mais leve do que mexer a cada frame.
+		local pulseInfo = TweenInfo.new(1.1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+		TweenService:Create(titleStroke, pulseInfo, { Thickness = 3, Color = CYAN }):Play()
+		TweenService:Create(title, pulseInfo, { TextColor3 = PINK }):Play()
+	end
 
-	-- Limites: o texto nao fica minusculo no celular nem gigante no PC.
-	local sizeLimit = Instance.new("UITextSizeConstraint")
-	sizeLimit.MinTextSize = 14
-	sizeLimit.MaxTextSize = 52
-	sizeLimit.Parent = title
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = PINK
-	stroke.Thickness = 2
-	stroke.Parent = title
-
-	-- Pulso: um Tween so, repetindo para sempre e voltando (reverses = true).
-	-- Bem mais leve do que mexer no texto a cada frame.
-	local pulseInfo = TweenInfo.new(1.1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
-	TweenService:Create(stroke, pulseInfo, { Thickness = 4, Color = CYAN }):Play()
-	TweenService:Create(title, pulseInfo, { TextColor3 = PINK }):Play()
-
-	-- Etiqueta pequena logo abaixo do titulo (longe dos controles do celular).
-	local tag = Instance.new("TextLabel")
-	tag.Name = "BuildTag"
-	tag.AnchorPoint = Vector2.new(0.5, 0)
-	tag.Position = UDim2.fromScale(0.5, 0.09)
-	tag.Size = UDim2.fromScale(0.25, 0.05)
-	tag.BackgroundTransparency = 1
-	tag.Text = "Week 1 build"
+	local tag = makeLabel(
+		gui,
+		"BuildTag",
+		UDim2.fromScale(0.01, 0.05),
+		UDim2.fromScale(0.12, 0.03),
+		"Week 2 build",
+		Color3.fromRGB(200, 215, 255),
+		12,
+		16
+	)
+	tag.AnchorPoint = Vector2.new(0, 0)
 	tag.Font = Enum.Font.GothamBold
-	tag.TextScaled = true
-	tag.TextColor3 = Color3.fromRGB(200, 215, 255)
 	tag.TextTransparency = 0.2
-	tag.Parent = gui
 
-	local tagLimit = Instance.new("UITextSizeConstraint")
-	tagLimit.MinTextSize = 12
-	tagLimit.MaxTextSize = 20
-	tagLimit.Parent = tag
+	-- Etiqueta da onda, topo centro.
+	local waveLabel = makeLabel(
+		gui,
+		"WaveLabel",
+		UDim2.fromScale(0.5, 0.01),
+		UDim2.fromScale(0.3, 0.06),
+		"WAVE 0/10",
+		YELLOW,
+		14,
+		44
+	)
+	local waveScale = Instance.new("UIScale")
+	waveScale.Parent = waveLabel
+
+	-- Etiqueta de estado/contagem, logo abaixo da onda.
+	local stateLabel = makeLabel(
+		gui,
+		"StateLabel",
+		UDim2.fromScale(0.5, 0.07),
+		UDim2.fromScale(0.3, 0.045),
+		"",
+		CYAN,
+		12,
+		30
+	)
+
+	-- Barra de vida da base.
+	local barFrame = Instance.new("Frame")
+	barFrame.Name = "BaseHealthBar"
+	barFrame.AnchorPoint = Vector2.new(0.5, 0)
+	barFrame.Position = UDim2.fromScale(0.5, 0.12)
+	barFrame.Size = UDim2.fromScale(0.36, 0.04)
+	barFrame.BackgroundColor3 = DARK
+	barFrame.BorderSizePixel = 0
+	barFrame.Parent = gui
+
+	local barCorner = Instance.new("UICorner")
+	barCorner.CornerRadius = UDim.new(0.5, 0)
+	barCorner.Parent = barFrame
+
+	local barStroke = Instance.new("UIStroke")
+	barStroke.Color = CYAN
+	barStroke.Thickness = 2
+	barStroke.Parent = barFrame
+
+	local barScale = Instance.new("UIScale")
+	barScale.Parent = barFrame
+
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.Size = UDim2.fromScale(1, 1)
+	fill.BackgroundColor3 = LIME
+	fill.BorderSizePixel = 0
+	fill.Parent = barFrame
+
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(0.5, 0)
+	fillCorner.Parent = fill
+
+	local healthText = Instance.new("TextLabel")
+	healthText.Name = "HealthText"
+	healthText.AnchorPoint = Vector2.new(0.5, 0.5)
+	healthText.Position = UDim2.fromScale(0.5, 0.5)
+	healthText.Size = UDim2.fromScale(0.6, 0.8)
+	healthText.BackgroundTransparency = 1
+	healthText.Font = Enum.Font.GothamBlack
+	healthText.TextScaled = true
+	healthText.TextColor3 = Color3.new(1, 1, 1)
+	healthText.Text = ""
+	healthText.ZIndex = 2 -- fica por cima da barra colorida
+	healthText.Parent = barFrame
+
+	local healthLimit = Instance.new("UITextSizeConstraint")
+	healthLimit.MinTextSize = 12
+	healthLimit.MaxTextSize = 26
+	healthLimit.Parent = healthText
+
+	local healthStroke = Instance.new("UIStroke")
+	healthStroke.Color = DARK
+	healthStroke.Thickness = 2
+	healthStroke.Parent = healthText
+
+	-- A pasta MatchState e criada pelo servidor; esperamos com tempo limite.
+	local matchStateInst = ReplicatedStorage:WaitForChild("MatchState", 30)
+	if not matchStateInst then
+		warn("[HudController] MatchState nao apareceu em 30s; HUD fica parado.")
+		return
+	end
+	local matchState: Instance = matchStateInst
+
+	-- Valores antigos guardados para so mexer na interface quando algo MUDA
+	-- (evita criar texto e tween a toa).
+	local lastWave = -1
+	local lastWaveCount = -1
+	local lastHealth = -1
+	local lastMaxHealth = -1
+	local lastState = ""
+	local lastSeconds = -1
+	local lastAlive = -1
+	local lastStateWave = -1
+	local fillTween: Tween? = nil
+
+	local function updateWave()
+		local wave = getNumber(matchState, "Wave", 0)
+		local waveCount = getNumber(matchState, "WaveCount", 10)
+		if wave == lastWave and waveCount == lastWaveCount then
+			return
+		end
+		if wave ~= lastWave and wave > 0 then
+			popScale(waveScale, 1.5) -- pop quando entra uma onda nova
+		end
+		lastWave = wave
+		lastWaveCount = waveCount
+		waveLabel.Text = "WAVE " .. wave .. "/" .. waveCount
+	end
+
+	local function updateState()
+		local stateValue = matchState:GetAttribute("State")
+		local state = if typeof(stateValue) == "string" then stateValue else "Waiting"
+		local endsAt = getNumber(matchState, "StateEndsAt", 0)
+		local seconds = 0
+		if endsAt > 0 then
+			seconds = math.max(0, math.ceil(endsAt - workspace:GetServerTimeNow()))
+		end
+		local alive = getNumber(matchState, "EnemiesAlive", 0)
+		local wave = getNumber(matchState, "Wave", 0)
+		local waveCount = getNumber(matchState, "WaveCount", 10)
+
+		if state == lastState and seconds == lastSeconds and alive == lastAlive and wave == lastStateWave then
+			return
+		end
+		lastState = state
+		lastSeconds = seconds
+		lastAlive = alive
+		lastStateWave = wave
+
+		local text = ""
+		local color = CYAN
+		if state == "Waiting" then
+			text = "Waiting for players..."
+		elseif state == "Intermission" then
+			text = "Next wave in " .. seconds
+			color = CYAN
+		elseif state == "Wave" then
+			if wave >= waveCount and waveCount > 0 then
+				text = "BOSS WAVE"
+				color = RED
+			else
+				text = "Enemies: " .. alive
+				color = YELLOW
+			end
+		elseif state == "Victory" then
+			text = "VICTORY!"
+			color = LIME
+			if seconds > 0 then
+				text ..= "  Restart in " .. seconds
+			end
+		elseif state == "Defeat" then
+			text = "DEFEAT"
+			color = RED
+			if seconds > 0 then
+				text ..= "  Restart in " .. seconds
+			end
+		end
+		stateLabel.Text = text
+		stateLabel.TextColor3 = color
+	end
+
+	local function updateHealth()
+		local health = getNumber(matchState, "BaseHealth", 100)
+		local maxHealth = math.max(1, getNumber(matchState, "BaseMaxHealth", 100))
+		if health == lastHealth and maxHealth == lastMaxHealth then
+			return
+		end
+		if lastHealth >= 0 and health < lastHealth then
+			popScale(barScale, 1.15) -- a barra "treme" quando a base leva dano
+		end
+		lastHealth = health
+		lastMaxHealth = maxHealth
+
+		local ratio = math.clamp(health / maxHealth, 0, 1)
+		local color = LIME
+		if ratio < LOW_HEALTH_RATIO then
+			color = RED
+		end
+
+		local old = fillTween
+		if old then
+			old:Cancel()
+		end
+		local tween = TweenService:Create(fill, FILL_INFO, {
+			Size = UDim2.fromScale(ratio, 1),
+			BackgroundColor3 = color,
+		})
+		fillTween = tween
+		tween:Play()
+
+		healthText.Text = math.ceil(health) .. "/" .. math.ceil(maxHealth)
+	end
+
+	local function refreshAll()
+		updateWave()
+		updateState()
+		updateHealth()
+	end
+
+	refreshAll()
+
+	-- Atributos replicam sozinhos; basta ouvir a mudanca (sem remotes).
+	table.insert(connections, matchState.AttributeChanged:Connect(refreshAll))
+
+	-- Contagem regressiva: Heartbeat com acumulador (10 vezes por segundo).
+	local accumulator = 0
+	table.insert(
+		connections,
+		RunService.Heartbeat:Connect(function(dt: number)
+			accumulator += dt
+			if accumulator < COUNTDOWN_INTERVAL then
+				return
+			end
+			accumulator = 0
+			updateState()
+		end)
+	)
 end
 
 return HudController
@@ -449,15 +2826,15 @@ return HudController
 			</Item>
 		</Item>
 	</Item>
-	<Item class="Workspace" referent="RBX00000011">
+	<Item class="Workspace" referent="RBX0000001A">
 		<Properties>
 			<string name="Name">Workspace</string>
 		</Properties>
-		<Item class="Model" referent="RBX00000012">
+		<Item class="Model" referent="RBX0000001B">
 			<Properties>
 				<string name="Name">Map</string>
 			</Properties>
-			<Item class="Part" referent="RBX00000013">
+			<Item class="Part" referent="RBX0000001C">
 				<Properties>
 					<string name="Name">Ground</string>
 					<token name="TopSurface">0</token>
@@ -469,11 +2846,11 @@ return HudController
 					<bool name="Anchored">true</bool>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX00000014">
+			<Item class="Folder" referent="RBX0000001D">
 				<Properties>
 					<string name="Name">Road</string>
 				</Properties>
-				<Item class="Part" referent="RBX00000015">
+				<Item class="Part" referent="RBX0000001E">
 					<Properties>
 						<string name="Name">Segment_1_2</string>
 						<token name="TopSurface">0</token>
@@ -485,7 +2862,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000016">
+				<Item class="Part" referent="RBX0000001F">
 					<Properties>
 						<string name="Name">Segment_2_3</string>
 						<token name="TopSurface">0</token>
@@ -497,7 +2874,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000017">
+				<Item class="Part" referent="RBX00000020">
 					<Properties>
 						<string name="Name">Segment_3_4</string>
 						<token name="TopSurface">0</token>
@@ -509,7 +2886,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000018">
+				<Item class="Part" referent="RBX00000021">
 					<Properties>
 						<string name="Name">Segment_4_5</string>
 						<token name="TopSurface">0</token>
@@ -521,7 +2898,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000019">
+				<Item class="Part" referent="RBX00000022">
 					<Properties>
 						<string name="Name">Segment_5_6</string>
 						<token name="TopSurface">0</token>
@@ -533,7 +2910,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000001A">
+				<Item class="Part" referent="RBX00000023">
 					<Properties>
 						<string name="Name">Segment_6_7</string>
 						<token name="TopSurface">0</token>
@@ -545,7 +2922,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000001B">
+				<Item class="Part" referent="RBX00000024">
 					<Properties>
 						<string name="Name">Segment_7_8</string>
 						<token name="TopSurface">0</token>
@@ -557,7 +2934,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000001C">
+				<Item class="Part" referent="RBX00000025">
 					<Properties>
 						<string name="Name">Joint_1</string>
 						<token name="TopSurface">0</token>
@@ -569,7 +2946,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000001D">
+				<Item class="Part" referent="RBX00000026">
 					<Properties>
 						<string name="Name">Joint_2</string>
 						<token name="TopSurface">0</token>
@@ -581,7 +2958,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000001E">
+				<Item class="Part" referent="RBX00000027">
 					<Properties>
 						<string name="Name">Joint_3</string>
 						<token name="TopSurface">0</token>
@@ -593,7 +2970,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000001F">
+				<Item class="Part" referent="RBX00000028">
 					<Properties>
 						<string name="Name">Joint_4</string>
 						<token name="TopSurface">0</token>
@@ -605,7 +2982,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000020">
+				<Item class="Part" referent="RBX00000029">
 					<Properties>
 						<string name="Name">Joint_5</string>
 						<token name="TopSurface">0</token>
@@ -617,7 +2994,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000021">
+				<Item class="Part" referent="RBX0000002A">
 					<Properties>
 						<string name="Name">Joint_6</string>
 						<token name="TopSurface">0</token>
@@ -629,7 +3006,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000022">
+				<Item class="Part" referent="RBX0000002B">
 					<Properties>
 						<string name="Name">Joint_7</string>
 						<token name="TopSurface">0</token>
@@ -641,7 +3018,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000023">
+				<Item class="Part" referent="RBX0000002C">
 					<Properties>
 						<string name="Name">Joint_8</string>
 						<token name="TopSurface">0</token>
@@ -654,11 +3031,11 @@ return HudController
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="Folder" referent="RBX00000024">
+			<Item class="Folder" referent="RBX0000002D">
 				<Properties>
 					<string name="Name">Waypoints</string>
 				</Properties>
-				<Item class="Part" referent="RBX00000025">
+				<Item class="Part" referent="RBX0000002E">
 					<Properties>
 						<string name="Name">1</string>
 						<token name="TopSurface">0</token>
@@ -675,7 +3052,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAADwPw==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000026">
+				<Item class="Part" referent="RBX0000002F">
 					<Properties>
 						<string name="Name">2</string>
 						<token name="TopSurface">0</token>
@@ -692,7 +3069,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAAQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000027">
+				<Item class="Part" referent="RBX00000030">
 					<Properties>
 						<string name="Name">3</string>
 						<token name="TopSurface">0</token>
@@ -709,7 +3086,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAIQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000028">
+				<Item class="Part" referent="RBX00000031">
 					<Properties>
 						<string name="Name">4</string>
 						<token name="TopSurface">0</token>
@@ -726,7 +3103,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAQQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000029">
+				<Item class="Part" referent="RBX00000032">
 					<Properties>
 						<string name="Name">5</string>
 						<token name="TopSurface">0</token>
@@ -743,7 +3120,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAUQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002A">
+				<Item class="Part" referent="RBX00000033">
 					<Properties>
 						<string name="Name">6</string>
 						<token name="TopSurface">0</token>
@@ -760,7 +3137,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAYQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002B">
+				<Item class="Part" referent="RBX00000034">
 					<Properties>
 						<string name="Name">7</string>
 						<token name="TopSurface">0</token>
@@ -777,7 +3154,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAcQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002C">
+				<Item class="Part" referent="RBX00000035">
 					<Properties>
 						<string name="Name">8</string>
 						<token name="TopSurface">0</token>
@@ -795,7 +3172,7 @@ return HudController
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="Part" referent="RBX0000002D">
+			<Item class="Part" referent="RBX00000036">
 				<Properties>
 					<string name="Name">EnemySpawn</string>
 					<token name="TopSurface">0</token>
@@ -808,7 +3185,7 @@ return HudController
 					<bool name="CanCollide">false</bool>
 				</Properties>
 			</Item>
-			<Item class="Part" referent="RBX0000002E">
+			<Item class="Part" referent="RBX00000037">
 				<Properties>
 					<string name="Name">PlayerBase</string>
 					<token name="TopSurface">0</token>
@@ -821,11 +3198,11 @@ return HudController
 					<BinaryString name="AttributesSerialize">AQAAAAkAAABNYXhIZWFsdGgGAAAAAAAAWUA=</BinaryString>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX0000002F">
+			<Item class="Folder" referent="RBX00000038">
 				<Properties>
 					<string name="Name">Buildings</string>
 				</Properties>
-				<Item class="Part" referent="RBX00000030">
+				<Item class="Part" referent="RBX00000039">
 					<Properties>
 						<string name="Name">Building_01</string>
 						<token name="TopSurface">0</token>
@@ -837,7 +3214,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000031">
+				<Item class="Part" referent="RBX0000003A">
 					<Properties>
 						<string name="Name">Building_02</string>
 						<token name="TopSurface">0</token>
@@ -849,7 +3226,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000032">
+				<Item class="Part" referent="RBX0000003B">
 					<Properties>
 						<string name="Name">Building_03</string>
 						<token name="TopSurface">0</token>
@@ -861,7 +3238,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000033">
+				<Item class="Part" referent="RBX0000003C">
 					<Properties>
 						<string name="Name">Building_04</string>
 						<token name="TopSurface">0</token>
@@ -873,7 +3250,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000034">
+				<Item class="Part" referent="RBX0000003D">
 					<Properties>
 						<string name="Name">Building_05</string>
 						<token name="TopSurface">0</token>
@@ -885,7 +3262,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000035">
+				<Item class="Part" referent="RBX0000003E">
 					<Properties>
 						<string name="Name">Building_06</string>
 						<token name="TopSurface">0</token>
@@ -897,7 +3274,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000036">
+				<Item class="Part" referent="RBX0000003F">
 					<Properties>
 						<string name="Name">Building_07</string>
 						<token name="TopSurface">0</token>
@@ -909,7 +3286,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000037">
+				<Item class="Part" referent="RBX00000040">
 					<Properties>
 						<string name="Name">Building_08</string>
 						<token name="TopSurface">0</token>
@@ -921,7 +3298,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000038">
+				<Item class="Part" referent="RBX00000041">
 					<Properties>
 						<string name="Name">Building_09</string>
 						<token name="TopSurface">0</token>
@@ -933,7 +3310,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000039">
+				<Item class="Part" referent="RBX00000042">
 					<Properties>
 						<string name="Name">Building_10</string>
 						<token name="TopSurface">0</token>
@@ -945,7 +3322,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003A">
+				<Item class="Part" referent="RBX00000043">
 					<Properties>
 						<string name="Name">Building_11</string>
 						<token name="TopSurface">0</token>
@@ -957,7 +3334,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003B">
+				<Item class="Part" referent="RBX00000044">
 					<Properties>
 						<string name="Name">Building_12</string>
 						<token name="TopSurface">0</token>
@@ -969,7 +3346,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003C">
+				<Item class="Part" referent="RBX00000045">
 					<Properties>
 						<string name="Name">Building_13</string>
 						<token name="TopSurface">0</token>
@@ -981,7 +3358,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003D">
+				<Item class="Part" referent="RBX00000046">
 					<Properties>
 						<string name="Name">Building_14</string>
 						<token name="TopSurface">0</token>
@@ -993,7 +3370,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003E">
+				<Item class="Part" referent="RBX00000047">
 					<Properties>
 						<string name="Name">Building_15</string>
 						<token name="TopSurface">0</token>
@@ -1005,7 +3382,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003F">
+				<Item class="Part" referent="RBX00000048">
 					<Properties>
 						<string name="Name">Building_16</string>
 						<token name="TopSurface">0</token>
@@ -1017,7 +3394,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000040">
+				<Item class="Part" referent="RBX00000049">
 					<Properties>
 						<string name="Name">Building_17</string>
 						<token name="TopSurface">0</token>
@@ -1029,7 +3406,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000041">
+				<Item class="Part" referent="RBX0000004A">
 					<Properties>
 						<string name="Name">Building_18</string>
 						<token name="TopSurface">0</token>
@@ -1041,7 +3418,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000042">
+				<Item class="Part" referent="RBX0000004B">
 					<Properties>
 						<string name="Name">Building_19</string>
 						<token name="TopSurface">0</token>
@@ -1054,7 +3431,7 @@ return HudController
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="SpawnLocation" referent="RBX00000043">
+			<Item class="SpawnLocation" referent="RBX0000004C">
 				<Properties>
 					<string name="Name">PlayerSpawn</string>
 					<token name="TopSurface">0</token>
@@ -1068,11 +3445,11 @@ return HudController
 					<int name="Duration">0</int>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX00000044">
+			<Item class="Folder" referent="RBX0000004D">
 				<Properties>
 					<string name="Name">Placement</string>
 				</Properties>
-				<Item class="Part" referent="RBX00000045">
+				<Item class="Part" referent="RBX0000004E">
 					<Properties>
 						<string name="Name">Slot_01</string>
 						<token name="TopSurface">0</token>
@@ -1086,7 +3463,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000046">
+				<Item class="Part" referent="RBX0000004F">
 					<Properties>
 						<string name="Name">Slot_02</string>
 						<token name="TopSurface">0</token>
@@ -1100,7 +3477,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000047">
+				<Item class="Part" referent="RBX00000050">
 					<Properties>
 						<string name="Name">Slot_03</string>
 						<token name="TopSurface">0</token>
@@ -1114,7 +3491,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000048">
+				<Item class="Part" referent="RBX00000051">
 					<Properties>
 						<string name="Name">Slot_04</string>
 						<token name="TopSurface">0</token>
@@ -1128,7 +3505,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000049">
+				<Item class="Part" referent="RBX00000052">
 					<Properties>
 						<string name="Name">Slot_05</string>
 						<token name="TopSurface">0</token>
@@ -1142,7 +3519,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004A">
+				<Item class="Part" referent="RBX00000053">
 					<Properties>
 						<string name="Name">Slot_06</string>
 						<token name="TopSurface">0</token>
@@ -1156,7 +3533,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004B">
+				<Item class="Part" referent="RBX00000054">
 					<Properties>
 						<string name="Name">Slot_07</string>
 						<token name="TopSurface">0</token>
@@ -1170,7 +3547,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004C">
+				<Item class="Part" referent="RBX00000055">
 					<Properties>
 						<string name="Name">Slot_08</string>
 						<token name="TopSurface">0</token>
@@ -1184,7 +3561,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004D">
+				<Item class="Part" referent="RBX00000056">
 					<Properties>
 						<string name="Name">Slot_09</string>
 						<token name="TopSurface">0</token>
@@ -1198,7 +3575,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004E">
+				<Item class="Part" referent="RBX00000057">
 					<Properties>
 						<string name="Name">Slot_10</string>
 						<token name="TopSurface">0</token>
