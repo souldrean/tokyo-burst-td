@@ -9,9 +9,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
-local Types = require(ReplicatedStorage.Shared.Types)
-local PathMath = require(ReplicatedStorage.Shared.Util.PathMath)
-local EnemyMath = require(ReplicatedStorage.Shared.Util.EnemyMath)
+-- WaitForChild: no cliente, as pastas podem chegar um pouco depois do script rodar.
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Types = require(Shared:WaitForChild("Types"))
+local PathMath = require(Shared:WaitForChild("Util"):WaitForChild("PathMath"))
+local EnemyMath = require(Shared:WaitForChild("Util"):WaitForChild("EnemyMath"))
 
 local BOB_SPEED = 6 -- velocidade do balanco (radianos por segundo)
 local BOB_HEIGHT = 0.35 -- altura do balanco em studs

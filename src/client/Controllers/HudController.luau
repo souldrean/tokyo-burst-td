@@ -164,7 +164,7 @@ function HudController.start()
 	barFrame.Name = "BaseHealthBar"
 	barFrame.AnchorPoint = Vector2.new(0.5, 0)
 	barFrame.Position = UDim2.fromScale(0.5, 0.12)
-	barFrame.Size = UDim2.fromScale(0.36, 0.04)
+	barFrame.Size = UDim2.fromScale(0.36, 0.055)
 	barFrame.BackgroundColor3 = DARK
 	barFrame.BorderSizePixel = 0
 	barFrame.Parent = gui

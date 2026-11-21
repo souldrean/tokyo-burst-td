@@ -11,7 +11,8 @@ local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
-local Net = require(ReplicatedStorage.Shared.Net)
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Net = require(Shared:WaitForChild("Net"))
 
 -- Paleta neon (rosa, ciano, amarelo, lima, roxo).
 local PALETTE: { Color3 } = {

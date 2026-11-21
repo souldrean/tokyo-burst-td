@@ -8,7 +8,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
-local Net = require(ReplicatedStorage.Shared.Net)
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Net = require(Shared:WaitForChild("Net"))
 
 local RAY_LENGTH = 1000
 local MIN_CLICK_INTERVAL = 0.1 -- no maximo 10 cliques por segundo (o servidor tambem limita)

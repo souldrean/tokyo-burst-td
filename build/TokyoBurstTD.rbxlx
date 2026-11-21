@@ -305,24 +305,7 @@ function PathMath.build(points: { Vector3 }): Types.PathData
 end
 
 function PathMath.totalLength(points: { Vector3 }): number
-	-- Direcao (vetor unitario no plano XZ) da reta onde a distancia cai.
--- Serve para o inimigo "olhar" para onde esta andando. Se nao der para calcular
--- (sem retas, ou reta so vertical), devolve Vector3.zAxis como valor seguro.
-function PathMath.directionAt(data: Types.PathData, distance: number): Vector3
-	if #data.points < 2 then
-		return Vector3.zAxis
-	end
-
-	local index = PathMath.segmentAt(data, distance)
-	local delta = data.points[index + 1] - data.points[index]
-	local flat = Vector3.new(delta.X, 0, delta.Z)
-	if flat.Magnitude < 1e-4 then
-		return Vector3.zAxis
-	end
-	return flat.Unit
-end
-
-return PathMath.build(points).total
+	return PathMath.build(points).total
 end
 
 -- Descobre em qual reta (indice) a distancia cai e a fracao t (0 a 1) dentro dela.
@@ -1225,10 +1208,10 @@ local pathData: Types.PathData? = nil
 type Entry = { index: number, position: Vector3 }
 
 function PathService.init()
-	-- WaitForChild com tempo limite: se o mapa nao existir, damos um erro claro.
-	local map = workspace:WaitForChild("Map", 10)
+	-- O mapa ja vem pronto no arquivo do jogo, entao FindFirstChild basta (init nao pode esperar).
+	local map = workspace:FindFirstChild("Map")
 	assert(map, "PathService: nao achei workspace.Map (o mapa foi construido pelo Rojo?)")
-	local folder = map:WaitForChild("Waypoints", 10)
+	local folder = map:FindFirstChild("Waypoints")
 	assert(folder, "PathService: nao achei workspace.Map.Waypoints")
 
 	local entries: { Entry } = {}
@@ -1359,7 +1342,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
-local Net = require(ReplicatedStorage.Shared.Net)
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Net = require(Shared:WaitForChild("Net"))
 
 local RAY_LENGTH = 1000
 local MIN_CLICK_INTERVAL = 0.1 -- no maximo 10 cliques por segundo (o servidor tambem limita)
@@ -1476,9 +1460,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
-local Types = require(ReplicatedStorage.Shared.Types)
-local PathMath = require(ReplicatedStorage.Shared.Util.PathMath)
-local EnemyMath = require(ReplicatedStorage.Shared.Util.EnemyMath)
+-- WaitForChild: no cliente, as pastas podem chegar um pouco depois do script rodar.
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Types = require(Shared:WaitForChild("Types"))
+local PathMath = require(Shared:WaitForChild("Util"):WaitForChild("PathMath"))
+local EnemyMath = require(Shared:WaitForChild("Util"):WaitForChild("EnemyMath"))
 
 local BOB_SPEED = 6 -- velocidade do balanco (radianos por segundo)
 local BOB_HEIGHT = 0.35 -- altura do balanco em studs
@@ -1837,7 +1823,8 @@ local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
-local Net = require(ReplicatedStorage.Shared.Net)
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Net = require(Shared:WaitForChild("Net"))
 
 -- Paleta neon (rosa, ciano, amarelo, lima, roxo).
 local PALETTE: { Color3 } = {
@@ -2623,7 +2610,7 @@ function HudController.start()
 	barFrame.Name = "BaseHealthBar"
 	barFrame.AnchorPoint = Vector2.new(0.5, 0)
 	barFrame.Position = UDim2.fromScale(0.5, 0.12)
-	barFrame.Size = UDim2.fromScale(0.36, 0.04)
+	barFrame.Size = UDim2.fromScale(0.36, 0.055)
 	barFrame.BackgroundColor3 = DARK
 	barFrame.BorderSizePixel = 0
 	barFrame.Parent = gui

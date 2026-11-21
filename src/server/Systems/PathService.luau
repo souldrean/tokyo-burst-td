@@ -16,10 +16,10 @@ local pathData: Types.PathData? = nil
 type Entry = { index: number, position: Vector3 }
 
 function PathService.init()
-	-- WaitForChild com tempo limite: se o mapa nao existir, damos um erro claro.
-	local map = workspace:WaitForChild("Map", 10)
+	-- O mapa ja vem pronto no arquivo do jogo, entao FindFirstChild basta (init nao pode esperar).
+	local map = workspace:FindFirstChild("Map")
 	assert(map, "PathService: nao achei workspace.Map (o mapa foi construido pelo Rojo?)")
-	local folder = map:WaitForChild("Waypoints", 10)
+	local folder = map:FindFirstChild("Waypoints")
 	assert(folder, "PathService: nao achei workspace.Map.Waypoints")
 
 	local entries: { Entry } = {}
