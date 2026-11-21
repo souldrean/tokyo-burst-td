@@ -34,7 +34,8 @@ type Enemy = {
 	heightOffset: number,
 }
 
-type RemovedCallback = (id: string, reason: Types.DeathReason) -> ()
+-- reward: o que o inimigo vale (0 se vazou). Quem so quer id/reason pode ignorar o resto.
+type RemovedCallback = (id: string, reason: Types.DeathReason, reward: number) -> ()
 
 -- Tabela por id: assim nunca precisamos varrer o workspace a cada tick.
 local enemies: { [string]: Enemy } = {}
@@ -47,6 +48,9 @@ local removedListeners: { RemovedCallback } = {}
 
 -- Lista reaproveitada a cada tick (evita criar uma tabela nova 10x por segundo).
 local leakedBuffer: { string } = {}
+
+-- Lista reaproveitada do snapshot(): as linhas sao tabelas fixas que so tem os campos reescritos.
+local snapshotBuffer: { Types.SnapshotEntry } = {}
 
 local HORN_COLOR = Color3.fromRGB(235, 228, 205)
 
@@ -131,8 +135,10 @@ local function remove(id: string, reason: Types.DeathReason)
 	enemies[id] = nil
 	aliveCount -= 1
 	enemy.model:Destroy()
+	-- Vazou nao da dinheiro; so quem foi morto vale a recompensa.
+	local reward = if reason == "Killed" then enemy.reward else 0
 	for _, callback in removedListeners do
-		callback(id, reason)
+		callback(id, reason, reward)
 	end
 end
 
@@ -253,6 +259,27 @@ function EnemyService.getDistance(id: string): number?
 		return nil
 	end
 	return currentDistance(enemy, workspace:GetServerTimeNow())
+end
+
+-- "Retrato" dos inimigos vivos para o combate das unidades (chamado 10x por segundo).
+-- Devolve (lista, quantidade). So as primeiras "quantidade" linhas valem: o resto e lixo
+-- de chamadas anteriores. A lista e REUSADA, entao nao guarde ela entre ticks.
+function EnemyService.snapshot(): ({ Types.SnapshotEntry }, number)
+	local now = workspace:GetServerTimeNow()
+	local count = 0
+	for id, enemy in enemies do
+		count += 1
+		local distance = currentDistance(enemy, now)
+		local entry = snapshotBuffer[count]
+		if not entry then
+			entry = { id = id, distance = distance, position = Vector3.zero }
+			snapshotBuffer[count] = entry
+		end
+		entry.id = id
+		entry.distance = distance
+		entry.position = centerPosition(enemy, distance)
+	end
+	return snapshotBuffer, count
 end
 
 -- Remove todos sem disparar eventos (usado ao terminar/reiniciar a partida).

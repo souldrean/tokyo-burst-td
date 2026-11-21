@@ -12,7 +12,16 @@ export type PathData = {
 }
 
 -- Nomes dos RemoteEvents (a lista fica aqui para cliente e servidor concordarem).
-export type RemoteName = "EnemyDied" | "BaseHit" | "WaveStarted" | "MatchEnded" | "DebugHitEnemy"
+export type RemoteName =
+	"EnemyDied"
+	| "BaseHit"
+	| "WaveStarted"
+	| "MatchEnded"
+	| "DebugHitEnemy"
+	| "PlaceUnit"
+	| "UnitPlaced"
+	| "UnitAttacked"
+	| "Notify"
 
 -- Por que um inimigo saiu do jogo: morto por nos ou chegou no fim (vazou).
 export type DeathReason = "Killed" | "Leaked"
@@ -28,6 +37,11 @@ export type MatchStateName = "Waiting" | "Intermission" | "Wave" | "Victory" | "
 --   WaveStarted(wave: number, waveCount: number, isBoss: boolean)
 --   MatchEnded(result: MatchResult)
 --   DebugHitEnemy(id: string)   <- cliente -> servidor (so no Studio)
+--   (semana 3)
+--   PlaceUnit(kind: string, slotName: string)        <- cliente -> servidor
+--   UnitPlaced(id: string, kind: string, position: Vector3, ownerUserId: number)   <- todos
+--   UnitAttacked(id: string, kind: string, from: Vector3, to: Vector3)             <- todos
+--   Notify(text: string)                              <- servidor -> UM cliente
 export type EnemyDiedPayload = {
 	id: string,
 	reason: DeathReason,
@@ -45,6 +59,30 @@ export type EnemyDef = {
 	color: Color3,
 	eyeColor: Color3,
 	horns: boolean,
+}
+
+-- Como a unidade ataca (so muda o visual do ataque no cliente).
+export type AttackStyle = "Shuriken" | "Slash" | "Orb"
+
+-- Dados de um tipo de unidade/torre (vem do Config.UNITS).
+export type UnitDef = {
+	displayName: string,
+	cost: number,
+	range: number, -- studs, distancia no plano XZ
+	damage: number,
+	cooldown: number, -- segundos entre ataques
+	splashRadius: number, -- 0 = dano em um alvo so
+	color: Color3, -- corpo
+	accentColor: Color3, -- partes neon e projetil
+	height: number,
+	attackStyle: AttackStyle,
+}
+
+-- Uma linha do "retrato" dos inimigos vivos (EnemyService.snapshot).
+export type SnapshotEntry = {
+	id: string,
+	distance: number, -- studs andados no caminho
+	position: Vector3, -- centro do inimigo no mundo
 }
 
 -- Um grupo de inimigos do mesmo tipo dentro de uma onda.
