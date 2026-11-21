@@ -1,0 +1,2519 @@
+{
+  "ClassName": "Model",
+  "Children": [
+    {
+      "Name": "Ground",
+      "ClassName": "Part",
+      "Properties": {
+        "Size": [
+          220.0,
+          1.0,
+          220.0
+        ],
+        "CFrame": {
+          "position": [
+            0.0,
+            -0.5,
+            0.0
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "Color": [
+          0.62,
+          0.62,
+          0.66
+        ],
+        "Material": "Concrete",
+        "Anchored": true
+      },
+      "Children": []
+    },
+    {
+      "Name": "Road",
+      "ClassName": "Folder",
+      "Children": [
+        {
+          "Name": "Segment_1_2",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              130.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                -25.0,
+                0.0,
+                -80.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Segment_2_3",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              50.0
+            ],
+            "CFrame": {
+              "position": [
+                40.0,
+                0.0,
+                -55.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Segment_3_4",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              100.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                -10.0,
+                0.0,
+                -30.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Segment_4_5",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              50.0
+            ],
+            "CFrame": {
+              "position": [
+                -60.0,
+                0.0,
+                -5.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Segment_5_6",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              120.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                0.0,
+                0.0,
+                20.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Segment_6_7",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              50.0
+            ],
+            "CFrame": {
+              "position": [
+                60.0,
+                0.0,
+                45.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Segment_7_8",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              140.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                -10.0,
+                0.0,
+                70.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Joint_1",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                -90.0,
+                0.0,
+                -80.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Joint_2",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                40.0,
+                0.0,
+                -80.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Joint_3",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                40.0,
+                0.0,
+                -30.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Joint_4",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                -60.0,
+                0.0,
+                -30.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Joint_5",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                -60.0,
+                0.0,
+                20.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Joint_6",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                60.0,
+                0.0,
+                20.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Joint_7",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                60.0,
+                0.0,
+                70.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Joint_8",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              0.2,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                -80.0,
+                0.0,
+                70.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.18,
+              0.18,
+              0.22
+            ],
+            "Material": "Asphalt",
+            "Anchored": true
+          },
+          "Children": []
+        }
+      ]
+    },
+    {
+      "Name": "Waypoints",
+      "ClassName": "Folder",
+      "Children": [
+        {
+          "Name": "1",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "CFrame": {
+              "position": [
+                -90.0,
+                1.0,
+                -80.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "Material": "Plastic",
+            "Anchored": true,
+            "Transparency": 1,
+            "CanCollide": false,
+            "CanQuery": false,
+            "CanTouch": false
+          },
+          "Children": [],
+          "Attributes": {
+            "Index": 1
+          }
+        },
+        {
+          "Name": "2",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "CFrame": {
+              "position": [
+                40.0,
+                1.0,
+                -80.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "Material": "Plastic",
+            "Anchored": true,
+            "Transparency": 1,
+            "CanCollide": false,
+            "CanQuery": false,
+            "CanTouch": false
+          },
+          "Children": [],
+          "Attributes": {
+            "Index": 2
+          }
+        },
+        {
+          "Name": "3",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "CFrame": {
+              "position": [
+                40.0,
+                1.0,
+                -30.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "Material": "Plastic",
+            "Anchored": true,
+            "Transparency": 1,
+            "CanCollide": false,
+            "CanQuery": false,
+            "CanTouch": false
+          },
+          "Children": [],
+          "Attributes": {
+            "Index": 3
+          }
+        },
+        {
+          "Name": "4",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "CFrame": {
+              "position": [
+                -60.0,
+                1.0,
+                -30.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "Material": "Plastic",
+            "Anchored": true,
+            "Transparency": 1,
+            "CanCollide": false,
+            "CanQuery": false,
+            "CanTouch": false
+          },
+          "Children": [],
+          "Attributes": {
+            "Index": 4
+          }
+        },
+        {
+          "Name": "5",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "CFrame": {
+              "position": [
+                -60.0,
+                1.0,
+                20.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "Material": "Plastic",
+            "Anchored": true,
+            "Transparency": 1,
+            "CanCollide": false,
+            "CanQuery": false,
+            "CanTouch": false
+          },
+          "Children": [],
+          "Attributes": {
+            "Index": 5
+          }
+        },
+        {
+          "Name": "6",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "CFrame": {
+              "position": [
+                60.0,
+                1.0,
+                20.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "Material": "Plastic",
+            "Anchored": true,
+            "Transparency": 1,
+            "CanCollide": false,
+            "CanQuery": false,
+            "CanTouch": false
+          },
+          "Children": [],
+          "Attributes": {
+            "Index": 6
+          }
+        },
+        {
+          "Name": "7",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "CFrame": {
+              "position": [
+                60.0,
+                1.0,
+                70.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "Material": "Plastic",
+            "Anchored": true,
+            "Transparency": 1,
+            "CanCollide": false,
+            "CanQuery": false,
+            "CanTouch": false
+          },
+          "Children": [],
+          "Attributes": {
+            "Index": 7
+          }
+        },
+        {
+          "Name": "8",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "CFrame": {
+              "position": [
+                -80.0,
+                1.0,
+                70.0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "Material": "Plastic",
+            "Anchored": true,
+            "Transparency": 1,
+            "CanCollide": false,
+            "CanQuery": false,
+            "CanTouch": false
+          },
+          "Children": [],
+          "Attributes": {
+            "Index": 8
+          }
+        }
+      ]
+    },
+    {
+      "Name": "EnemySpawn",
+      "ClassName": "Part",
+      "Properties": {
+        "Size": [
+          10.0,
+          0.4,
+          10.0
+        ],
+        "CFrame": {
+          "position": [
+            -90.0,
+            0.3,
+            -80.0
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "Color": [
+          1.0,
+          0.2,
+          0.35
+        ],
+        "Material": "Neon",
+        "Anchored": true,
+        "CanCollide": false
+      },
+      "Children": []
+    },
+    {
+      "Name": "PlayerBase",
+      "ClassName": "Part",
+      "Properties": {
+        "Size": [
+          14.0,
+          8.0,
+          14.0
+        ],
+        "CFrame": {
+          "position": [
+            -80.0,
+            4.0,
+            70.0
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "Color": [
+          0.2,
+          0.75,
+          1.0
+        ],
+        "Material": "Neon",
+        "Anchored": true
+      },
+      "Children": [],
+      "Attributes": {
+        "MaxHealth": 100
+      }
+    },
+    {
+      "Name": "Buildings",
+      "ClassName": "Folder",
+      "Children": [
+        {
+          "Name": "Building_01",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              16.0,
+              56.0,
+              10.0
+            ],
+            "CFrame": {
+              "position": [
+                -35.57,
+                28.0,
+                95.49
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.576,
+              0.586,
+              0.642
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_02",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              30.0,
+              10.0
+            ],
+            "CFrame": {
+              "position": [
+                61.91,
+                15.0,
+                97.02
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.634,
+              0.656,
+              0.703
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_03",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              13.0,
+              45.0,
+              13.0
+            ],
+            "CFrame": {
+              "position": [
+                70.32,
+                22.5,
+                -26.56
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.638,
+              0.651,
+              0.661
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_04",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              14.0,
+              51.0,
+              10.0
+            ],
+            "CFrame": {
+              "position": [
+                25.87,
+                25.5,
+                -9.6
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.709,
+              0.713,
+              0.746
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_05",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              11.0,
+              50.0,
+              15.0
+            ],
+            "CFrame": {
+              "position": [
+                59.62,
+                25.0,
+                -76.12
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.523,
+              0.545,
+              0.58
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_06",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              14.0,
+              48.0,
+              15.0
+            ],
+            "CFrame": {
+              "position": [
+                -58.68,
+                24.0,
+                89.82
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.525,
+              0.53,
+              0.564
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_07",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              16.0,
+              22.0,
+              14.0
+            ],
+            "CFrame": {
+              "position": [
+                86.29,
+                11.0,
+                -43.74
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.561,
+              0.585,
+              0.613
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_08",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              18.0,
+              31.0,
+              16.0
+            ],
+            "CFrame": {
+              "position": [
+                38.11,
+                15.5,
+                90.86
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.72,
+              0.738,
+              0.809
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_09",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              58.0,
+              13.0
+            ],
+            "CFrame": {
+              "position": [
+                48.99,
+                29.0,
+                -5.33
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.657,
+              0.661,
+              0.682
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_10",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              17.0,
+              13.0,
+              10.0
+            ],
+            "CFrame": {
+              "position": [
+                -4.27,
+                6.5,
+                49.51
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.612,
+              0.615,
+              0.684
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_11",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              20.0,
+              18.0
+            ],
+            "CFrame": {
+              "position": [
+                -79.81,
+                10.0,
+                -32.93
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.66,
+              0.674,
+              0.689
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_12",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              10.0,
+              47.0,
+              16.0
+            ],
+            "CFrame": {
+              "position": [
+                95.4,
+                23.5,
+                52.51
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.628,
+              0.65,
+              0.701
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_13",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              18.0,
+              34.0,
+              10.0
+            ],
+            "CFrame": {
+              "position": [
+                93.16,
+                17.0,
+                -61.2
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.464,
+              0.485,
+              0.536
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_14",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              13.0,
+              53.0,
+              16.0
+            ],
+            "CFrame": {
+              "position": [
+                92.86,
+                26.5,
+                -78.52
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.635,
+              0.655,
+              0.664
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_15",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              18.0,
+              37.0,
+              17.0
+            ],
+            "CFrame": {
+              "position": [
+                90.9,
+                18.5,
+                83.03
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.457,
+              0.476,
+              0.478
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_16",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              18.0,
+              17.0,
+              14.0
+            ],
+            "CFrame": {
+              "position": [
+                -3.22,
+                8.5,
+                99.1
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.443,
+              0.458,
+              0.52
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_17",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              12.0,
+              47.0,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                -75.93,
+                23.5,
+                -100.2
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.479,
+              0.503,
+              0.52
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_18",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              13.0,
+              58.0,
+              18.0
+            ],
+            "CFrame": {
+              "position": [
+                -100.08,
+                29.0,
+                22.89
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.65,
+              0.665,
+              0.679
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        },
+        {
+          "Name": "Building_19",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              15.0,
+              44.0,
+              12.0
+            ],
+            "CFrame": {
+              "position": [
+                -95.63,
+                22.0,
+                47.76
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              0.616,
+              0.637,
+              0.69
+            ],
+            "Material": "SmoothPlastic",
+            "Anchored": true
+          },
+          "Children": []
+        }
+      ]
+    },
+    {
+      "Name": "PlayerSpawn",
+      "ClassName": "SpawnLocation",
+      "Properties": {
+        "Size": [
+          12.0,
+          1.0,
+          12.0
+        ],
+        "CFrame": {
+          "position": [
+            -12.06,
+            0.5,
+            -5.6
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "Color": [
+          0.35,
+          0.35,
+          0.4
+        ],
+        "Material": "SmoothPlastic",
+        "Anchored": true,
+        "Neutral": true,
+        "Duration": 0
+      },
+      "Children": []
+    },
+    {
+      "Name": "Placement",
+      "ClassName": "Folder",
+      "Children": [
+        {
+          "Name": "Slot_01",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              8.0,
+              0.2,
+              8.0
+            ],
+            "CFrame": {
+              "position": [
+                -53.64,
+                0.1,
+                -67.23
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              0.85,
+              0.2
+            ],
+            "Material": "Neon",
+            "Anchored": true,
+            "Transparency": 0.6,
+            "CanCollide": false
+          },
+          "Children": []
+        },
+        {
+          "Name": "Slot_02",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              8.0,
+              0.2,
+              8.0
+            ],
+            "CFrame": {
+              "position": [
+                0.63,
+                0.1,
+                -66.44
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              0.85,
+              0.2
+            ],
+            "Material": "Neon",
+            "Anchored": true,
+            "Transparency": 0.6,
+            "CanCollide": false
+          },
+          "Children": []
+        },
+        {
+          "Name": "Slot_03",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              8.0,
+              0.2,
+              8.0
+            ],
+            "CFrame": {
+              "position": [
+                27.13,
+                0.1,
+                -57.51
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              0.85,
+              0.2
+            ],
+            "Material": "Neon",
+            "Anchored": true,
+            "Transparency": 0.6,
+            "CanCollide": false
+          },
+          "Children": []
+        },
+        {
+          "Name": "Slot_04",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              8.0,
+              0.2,
+              8.0
+            ],
+            "CFrame": {
+              "position": [
+                -8.98,
+                0.1,
+                -42.55
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              0.85,
+              0.2
+            ],
+            "Material": "Neon",
+            "Anchored": true,
+            "Transparency": 0.6,
+            "CanCollide": false
+          },
+          "Children": []
+        },
+        {
+          "Name": "Slot_05",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              8.0,
+              0.2,
+              8.0
+            ],
+            "CFrame": {
+              "position": [
+                -46.83,
+                0.1,
+                -15.64
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              0.85,
+              0.2
+            ],
+            "Material": "Neon",
+            "Anchored": true,
+            "Transparency": 0.6,
+            "CanCollide": false
+          },
+          "Children": []
+        },
+        {
+          "Name": "Slot_06",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              8.0,
+              0.2,
+              8.0
+            ],
+            "CFrame": {
+              "position": [
+                -33.4,
+                0.1,
+                32.88
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              0.85,
+              0.2
+            ],
+            "Material": "Neon",
+            "Anchored": true,
+            "Transparency": 0.6,
+            "CanCollide": false
+          },
+          "Children": []
+        },
+        {
+          "Name": "Slot_07",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              8.0,
+              0.2,
+              8.0
+            ],
+            "CFrame": {
+              "position": [
+                35.39,
+                0.1,
+                6.5
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              0.85,
+              0.2
+            ],
+            "Material": "Neon",
+            "Anchored": true,
+            "Transparency": 0.6,
+            "CanCollide": false
+          },
+          "Children": []
+        },
+        {
+          "Name": "Slot_08",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              8.0,
+              0.2,
+              8.0
+            ],
+            "CFrame": {
+              "position": [
+                72.82,
+                0.1,
+                41.12
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              0.85,
+              0.2
+            ],
+            "Material": "Neon",
+            "Anchored": true,
+            "Transparency": 0.6,
+            "CanCollide": false
+          },
+          "Children": []
+        },
+        {
+          "Name": "Slot_09",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              8.0,
+              0.2,
+              8.0
+            ],
+            "CFrame": {
+              "position": [
+                18.46,
+                0.1,
+                56.95
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              0.85,
+              0.2
+            ],
+            "Material": "Neon",
+            "Anchored": true,
+            "Transparency": 0.6,
+            "CanCollide": false
+          },
+          "Children": []
+        },
+        {
+          "Name": "Slot_10",
+          "ClassName": "Part",
+          "Properties": {
+            "Size": [
+              8.0,
+              0.2,
+              8.0
+            ],
+            "CFrame": {
+              "position": [
+                -56.7,
+                0.1,
+                56.55
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "Color": [
+              1.0,
+              0.85,
+              0.2
+            ],
+            "Material": "Neon",
+            "Anchored": true,
+            "Transparency": 0.6,
+            "CanCollide": false
+          },
+          "Children": []
+        }
+      ]
+    }
+  ]
+}
