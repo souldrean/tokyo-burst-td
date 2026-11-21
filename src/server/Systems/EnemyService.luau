@@ -138,7 +138,11 @@ local function remove(id: string, reason: Types.DeathReason)
 	-- Vazou nao da dinheiro; so quem foi morto vale a recompensa.
 	local reward = if reason == "Killed" then enemy.reward else 0
 	for _, callback in removedListeners do
-		callback(id, reason, reward)
+		-- pcall: um listener quebrado nao pode impedir os outros de rodar.
+		local ok, err = pcall(callback, id, reason, reward)
+		if not ok then
+			warn(`[EnemyService] onEnemyRemoved listener failed: {err}`)
+		end
 	end
 end
 

@@ -936,7 +936,11 @@ local function remove(id: string, reason: Types.DeathReason)
 	-- Vazou nao da dinheiro; so quem foi morto vale a recompensa.
 	local reward = if reason == "Killed" then enemy.reward else 0
 	for _, callback in removedListeners do
-		callback(id, reason, reward)
+		-- pcall: um listener quebrado nao pode impedir os outros de rodar.
+		local ok, err = pcall(callback, id, reason, reward)
+		if not ok then
+			warn(`[EnemyService] onEnemyRemoved listener failed: {err}`)
+		end
 	end
 end
 
@@ -1667,10 +1671,20 @@ local function decorate(
 	part.CanQuery = false
 	part.CFrame = baseCFrame * offset
 	part.Parent = model
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = root
-	weld.Part1 = part
-	weld.Parent = part
+	if name == "Orb" then
+		-- Orb usa Weld real: o cliente anima C0 para o bob, e WeldConstraint nao tem C0 editavel.
+		local weld = Instance.new("Weld")
+		weld.Part0 = root
+		weld.Part1 = part
+		weld.C0 = root.CFrame:ToObjectSpace(part.CFrame)
+		weld.C1 = CFrame.new()
+		weld.Parent = part
+	else
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = root
+		weld.Part1 = part
+		weld.Parent = part
+	end
 end
 
 -- Disco achatado (cilindro deitado para ficar "em pe" no eixo Y).
@@ -1826,17 +1840,18 @@ local function onPlaceUnit(player: Player, kind: unknown, slotName: unknown)
 		notify(player, "Unit limit reached")
 		return
 	end
-	-- 7. Dinheiro: trySpend confere e desconta numa tacada so.
+	-- 7. Sem container nao da para criar a unidade: confere ANTES de gastar o dinheiro.
+	local folder = container
+	if not folder then
+		return
+	end
+	-- 8. Dinheiro: trySpend confere e desconta numa tacada so.
 	if not EconomyService.trySpend(player, def.cost) then
 		notify(player, "Not enough cash!")
 		return
 	end
 
 	-- Tudo certo: cria a unidade em cima do slot, virada para a estrada.
-	local folder = container
-	if not folder then
-		return
-	end
 	nextId += 1
 	local id = `U{nextId}`
 	local ground = Vector3.new(slot.Position.X, slot.Position.Y + slot.Size.Y / 2, slot.Position.Z)
@@ -1918,7 +1933,8 @@ local function combatTick()
 			continue
 		end
 
-		unit.nextAttack = now + def.cooldown
+		-- Soma ao proximo ataque (nao ao "now") para a quantizacao do tick nao alongar o cooldown.
+		unit.nextAttack = math.max(unit.nextAttack + def.cooldown, now)
 		local targetPosition = target.position
 		local targetId = target.id
 		EnemyService.damage(targetId, def.damage)
@@ -3141,7 +3157,8 @@ local function finishProjectile(slot: ProjectileSlot)
 	if slot.style == STYLE_ORB then
 		-- Orb: anel no tamanho da area de dano + um pouco de confete.
 		local diameter = if slot.visual.splash > 0 then slot.visual.splash * 2 else 5
-		ring(slot.to, accent, diameter)
+		-- Anel no chao (to e o centro do inimigo, no ar); a faisca fica no inimigo.
+		ring(Vector3.new(slot.to.X, 0.3, slot.to.Z), accent, diameter)
 		spark(slot.to, accent, 14)
 		burst(burstSlots, nextBurst, slot.to, 2, accent)
 		nextBurst = nextBurst % #burstSlots + 1
@@ -3309,7 +3326,8 @@ local function placeExplosion(position: Vector3, visual: UnitVisual)
 	slot.sphere.Color = accent
 	slot.sphere.Size = Vector3.one * 1.5
 	slot.sphere.Transparency = 0.2
-	slot.sphere.Position = position
+	-- position e o pe da unidade: centra a esfera na altura do corpo.
+	slot.sphere.Position = position + Vector3.new(0, visual.height * 0.5, 0)
 	local grow = TweenService:Create(slot.sphere, SPHERE_INFO, { Size = Vector3.one * 11, Transparency = 1 })
 
 	-- Pilar de luz vertical (cilindro em pe: Size.X e a altura).
@@ -3317,8 +3335,9 @@ local function placeExplosion(position: Vector3, visual: UnitVisual)
 	slot.pillar.Color = Color3.new(1, 1, 1):Lerp(accent, 0.4)
 	slot.pillar.Size = Vector3.new(pillarHeight, 4, 4)
 	slot.pillar.Transparency = 0.2
-	slot.pillar.CFrame = CFrame.new(position + Vector3.new(0, pillarHeight * 0.5 - 1.5, 0)) * FLAT
-	local rise = TweenService:Create(slot.pillar, PILLAR_INFO, { Size = Vector3.new(pillarHeight * 1.4, 0.4, 0.4), Transparency = 1 })
+	slot.pillar.CFrame = CFrame.new(position + Vector3.new(0, pillarHeight * 0.5 + 0.2, 0)) * FLAT
+	-- So a espessura encolhe; o comprimento fica fixo para a base nao afundar no chao.
+	local rise = TweenService:Create(slot.pillar, PILLAR_INFO, { Size = Vector3.new(pillarHeight, 0.4, 0.4), Transparency = 1 })
 
 	-- Flash de luz.
 	slot.light.Color = accent
@@ -3334,7 +3353,7 @@ local function placeExplosion(position: Vector3, visual: UnitVisual)
 
 	-- Anel no chao (usa o proprio anel do slot, reservado para esta explosao).
 	cancelAll(slot.ring.tweens)
-	playRing(slot.ring, position - Vector3.new(0, visual.height * 0.35, 0), accent, 14, PLACE_RING_INFO)
+	playRing(slot.ring, position + Vector3.new(0, 0.35, 0), accent, 14, PLACE_RING_INFO)
 end
 
 -- ---------------------------------------------------------------------------
@@ -3910,9 +3929,22 @@ function HudController.start()
 
 	local lastCash = getNumber(localPlayer, "Cash", 0)
 	shownValue.Value = lastCash
+	-- Ao entrar o atributo pode ainda nao ter replicado: o primeiro valor aparece sem animar.
+	local cashReady = localPlayer:GetAttribute("Cash") ~= nil
+	if not cashReady then
+		task.delay(10, function()
+			cashReady = true -- fallback: depois de 10 s as mudancas voltam a animar
+		end)
+	end
 
 	local function updateCash()
 		local cash = getNumber(localPlayer, "Cash", 0)
+		if not cashReady then
+			cashReady = true
+			lastCash = cash
+			shownValue.Value = cash
+			return
+		end
 		if cash == lastCash then
 			return
 		end
@@ -4192,13 +4224,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Net = require(Shared:WaitForChild("Net"))
 local Config = require(Shared:WaitForChild("Config"))
 
--- Formato de uma unidade em Config.UNITS (copiado do SPEC; so os campos que a UI usa).
-type UnitDef = {
-	displayName: string,
-	cost: number,
-	color: Color3,
-	accentColor: Color3,
-}
+local Types = require(Shared:WaitForChild("Types"))
+
+type UnitDef = Types.UnitDef
 
 type Card = {
 	kind: string,
@@ -4273,7 +4301,7 @@ function PlacementController.start()
 	local localPlayer = Players.LocalPlayer
 	local playerGui = localPlayer:WaitForChild("PlayerGui")
 
-	local units = Config.UNITS :: { [string]: UnitDef }
+	local units = Config.UNITS
 	local order = Config.UNIT_ORDER :: { string }
 
 	local placeRemote = Net.event("PlaceUnit")
@@ -4524,7 +4552,8 @@ function PlacementController.start()
 	local hint = Instance.new("TextLabel")
 	hint.Name = "Hint"
 	hint.AnchorPoint = Vector2.new(0.5, 1)
-	hint.Position = UDim2.fromScale(0.5, 0.77)
+	-- Acima do Cancel; o offset cobre o tamanho minimo (40 px) do botao em telas pequenas.
+	hint.Position = UDim2.new(0.5, 0, 0.71, -20)
 	hint.Size = UDim2.fromScale(0.34, 0.05)
 	hint.BackgroundTransparency = 1
 	hint.Font = Enum.Font.GothamBlack
@@ -4545,7 +4574,8 @@ function PlacementController.start()
 	local cancelButton = Instance.new("TextButton")
 	cancelButton.Name = "Cancel"
 	cancelButton.AnchorPoint = Vector2.new(0.5, 1)
-	cancelButton.Position = UDim2.fromScale(0.5, 0.835)
+	-- Base do botao logo acima da borda de cima da hotbar (0.98 - 0.2 = 0.78), nunca em cima dela.
+	cancelButton.Position = UDim2.fromScale(0.5, 0.77)
 	cancelButton.Size = UDim2.fromScale(0.16, 0.06)
 	cancelButton.BackgroundColor3 = RED
 	cancelButton.AutoButtonColor = false
@@ -4627,6 +4657,14 @@ function PlacementController.start()
 
 	local function exitPlacement()
 		setSelected(nil)
+	end
+
+	-- Se o Cash ainda nao replicou ao entrar, o primeiro valor nao anima (fallback de 10 s).
+	local cashReady = localPlayer:GetAttribute("Cash") ~= nil
+	if not cashReady then
+		task.delay(10, function()
+			cashReady = true
+		end)
 	end
 
 	local function updateAffordability(playPop: boolean)
@@ -4947,7 +4985,10 @@ function PlacementController.start()
 	table.insert(
 		connections,
 		localPlayer:GetAttributeChangedSignal("Cash"):Connect(function()
-			updateAffordability(true)
+			-- Primeiro valor pos-join nao e "ganho": atualiza sem o pop.
+			local playPop = cashReady
+			cashReady = true
+			updateAffordability(playPop)
 		end)
 	)
 	updateAffordability(false)
@@ -4970,7 +5011,7 @@ function PlacementController.start()
 		if not matchState then
 			return
 		end
-		local allowed = Config.PLACE_ALLOWED_STATES :: { [string]: boolean }
+		local allowed = Config.PLACE_ALLOWED_STATES
 		table.insert(
 			connections,
 			matchState:GetAttributeChangedSignal("State"):Connect(function()
@@ -5014,6 +5055,7 @@ local PULSE_SPEED = 3 -- velocidade do brilho neon
 local PULSE_DEPTH = 0.3 -- o quanto o neon fica transparente no ponto mais fraco
 local BOB_HEIGHT = 0.35 -- studs que o orb sobe e desce
 local BOB_SPEED = 2.2
+local PULSE_WRITE_INTERVAL = 1 / 30 -- neon nao precisa de 60 Hz; economiza escritas de propriedade
 
 type UnitState = {
 	model: Model,
@@ -5026,12 +5068,14 @@ type UnitState = {
 	appliedScale: number,
 	orbWeld: Weld?, -- junta que prende o orb ao corpo (se o servidor usou Weld)
 	orbBaseC0: CFrame,
+	upLocal: Vector3, -- "cima" do mundo no espaco do Root (o Root e cilindro deitado)
 }
 
 local UnitFxController = {}
 
 local connections: { RBXScriptConnection } = {}
 local renderConnection: RBXScriptConnection? = nil
+local pulseAccumulator = 0
 local states: { [Model]: UnitState } = {}
 local statesById: { [string]: UnitState } = {}
 
@@ -5050,7 +5094,7 @@ local function register(model: Model, withPop: boolean)
 		return
 	end
 	local root = model:FindFirstChild("Root")
-	if not root then
+	if not root or not root:IsA("BasePart") then
 		return
 	end
 
@@ -5063,7 +5107,7 @@ local function register(model: Model, withPop: boolean)
 			table.insert(parts, descendant)
 			table.insert(bases, descendant.Transparency)
 			local isOrbName = string.find(string.lower(descendant.Name), "orb", 1, true) ~= nil
-			if orb == nil and (isOrbName or (kind == "Mage" and descendant.Shape == Enum.PartType.Ball)) then
+			if orb == nil and (isOrbName or (kind == "Mage" and descendant:IsA("Part") and descendant.Shape == Enum.PartType.Ball)) then
 				orb = descendant
 			end
 		end
@@ -5089,6 +5133,7 @@ local function register(model: Model, withPop: boolean)
 		appliedScale = 1,
 		orbWeld = weld,
 		orbBaseC0 = baseC0,
+		upLocal = root.CFrame:VectorToObjectSpace(Vector3.yAxis),
 	}
 	states[model] = state
 	local id = model:GetAttribute("Id")
@@ -5144,6 +5189,11 @@ end
 -- UM loop para todas as unidades. Sem tabelas novas, sem Instance.new.
 local function onRenderStep(dt: number)
 	local now = os.clock()
+	pulseAccumulator += dt
+	local writePulse = pulseAccumulator >= PULSE_WRITE_INTERVAL
+	if writePulse then
+		pulseAccumulator = 0
+	end
 	for model, state in states do
 		local scale = 1
 
@@ -5176,11 +5226,13 @@ local function onRenderStep(dt: number)
 		end
 
 		-- Brilho neon pulsando.
-		local wave = 0.5 + 0.5 * math.sin(now * PULSE_SPEED + state.phase)
-		local parts = state.parts
-		local bases = state.baseTransparency
-		for i = 1, state.partCount do
-			parts[i].Transparency = bases[i] + PULSE_DEPTH * wave * (1 - bases[i])
+		if writePulse then
+			local wave = 0.5 + 0.5 * math.sin(now * PULSE_SPEED + state.phase)
+			local parts = state.parts
+			local bases = state.baseTransparency
+			for i = 1, state.partCount do
+				parts[i].Transparency = bases[i] + PULSE_DEPTH * wave * (1 - bases[i])
+			end
 		end
 
 		-- Orb flutuando: mexe so no offset da junta (o ScaleTo ja escalou o C0, entao recalculamos).
@@ -5188,7 +5240,7 @@ local function onRenderStep(dt: number)
 		if weld then
 			local base = state.orbBaseC0
 			local bob = math.sin(now * BOB_SPEED + state.phase) * BOB_HEIGHT * state.appliedScale
-			weld.C0 = CFrame.new(base.Position * state.appliedScale + Vector3.new(0, bob, 0)) * base.Rotation
+			weld.C0 = CFrame.new(base.Position * state.appliedScale + state.upLocal * bob) * base.Rotation
 		end
 	end
 end

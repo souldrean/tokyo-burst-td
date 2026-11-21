@@ -135,10 +135,20 @@ local function decorate(
 	part.CanQuery = false
 	part.CFrame = baseCFrame * offset
 	part.Parent = model
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = root
-	weld.Part1 = part
-	weld.Parent = part
+	if name == "Orb" then
+		-- Orb usa Weld real: o cliente anima C0 para o bob, e WeldConstraint nao tem C0 editavel.
+		local weld = Instance.new("Weld")
+		weld.Part0 = root
+		weld.Part1 = part
+		weld.C0 = root.CFrame:ToObjectSpace(part.CFrame)
+		weld.C1 = CFrame.new()
+		weld.Parent = part
+	else
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = root
+		weld.Part1 = part
+		weld.Parent = part
+	end
 end
 
 -- Disco achatado (cilindro deitado para ficar "em pe" no eixo Y).
@@ -294,17 +304,18 @@ local function onPlaceUnit(player: Player, kind: unknown, slotName: unknown)
 		notify(player, "Unit limit reached")
 		return
 	end
-	-- 7. Dinheiro: trySpend confere e desconta numa tacada so.
+	-- 7. Sem container nao da para criar a unidade: confere ANTES de gastar o dinheiro.
+	local folder = container
+	if not folder then
+		return
+	end
+	-- 8. Dinheiro: trySpend confere e desconta numa tacada so.
 	if not EconomyService.trySpend(player, def.cost) then
 		notify(player, "Not enough cash!")
 		return
 	end
 
 	-- Tudo certo: cria a unidade em cima do slot, virada para a estrada.
-	local folder = container
-	if not folder then
-		return
-	end
 	nextId += 1
 	local id = `U{nextId}`
 	local ground = Vector3.new(slot.Position.X, slot.Position.Y + slot.Size.Y / 2, slot.Position.Z)
@@ -386,7 +397,8 @@ local function combatTick()
 			continue
 		end
 
-		unit.nextAttack = now + def.cooldown
+		-- Soma ao proximo ataque (nao ao "now") para a quantizacao do tick nao alongar o cooldown.
+		unit.nextAttack = math.max(unit.nextAttack + def.cooldown, now)
 		local targetPosition = target.position
 		local targetId = target.id
 		EnemyService.damage(targetId, def.damage)

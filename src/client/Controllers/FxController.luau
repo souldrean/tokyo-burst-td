@@ -555,7 +555,8 @@ local function finishProjectile(slot: ProjectileSlot)
 	if slot.style == STYLE_ORB then
 		-- Orb: anel no tamanho da area de dano + um pouco de confete.
 		local diameter = if slot.visual.splash > 0 then slot.visual.splash * 2 else 5
-		ring(slot.to, accent, diameter)
+		-- Anel no chao (to e o centro do inimigo, no ar); a faisca fica no inimigo.
+		ring(Vector3.new(slot.to.X, 0.3, slot.to.Z), accent, diameter)
 		spark(slot.to, accent, 14)
 		burst(burstSlots, nextBurst, slot.to, 2, accent)
 		nextBurst = nextBurst % #burstSlots + 1
@@ -723,7 +724,8 @@ local function placeExplosion(position: Vector3, visual: UnitVisual)
 	slot.sphere.Color = accent
 	slot.sphere.Size = Vector3.one * 1.5
 	slot.sphere.Transparency = 0.2
-	slot.sphere.Position = position
+	-- position e o pe da unidade: centra a esfera na altura do corpo.
+	slot.sphere.Position = position + Vector3.new(0, visual.height * 0.5, 0)
 	local grow = TweenService:Create(slot.sphere, SPHERE_INFO, { Size = Vector3.one * 11, Transparency = 1 })
 
 	-- Pilar de luz vertical (cilindro em pe: Size.X e a altura).
@@ -731,8 +733,9 @@ local function placeExplosion(position: Vector3, visual: UnitVisual)
 	slot.pillar.Color = Color3.new(1, 1, 1):Lerp(accent, 0.4)
 	slot.pillar.Size = Vector3.new(pillarHeight, 4, 4)
 	slot.pillar.Transparency = 0.2
-	slot.pillar.CFrame = CFrame.new(position + Vector3.new(0, pillarHeight * 0.5 - 1.5, 0)) * FLAT
-	local rise = TweenService:Create(slot.pillar, PILLAR_INFO, { Size = Vector3.new(pillarHeight * 1.4, 0.4, 0.4), Transparency = 1 })
+	slot.pillar.CFrame = CFrame.new(position + Vector3.new(0, pillarHeight * 0.5 + 0.2, 0)) * FLAT
+	-- So a espessura encolhe; o comprimento fica fixo para a base nao afundar no chao.
+	local rise = TweenService:Create(slot.pillar, PILLAR_INFO, { Size = Vector3.new(pillarHeight, 0.4, 0.4), Transparency = 1 })
 
 	-- Flash de luz.
 	slot.light.Color = accent
@@ -748,7 +751,7 @@ local function placeExplosion(position: Vector3, visual: UnitVisual)
 
 	-- Anel no chao (usa o proprio anel do slot, reservado para esta explosao).
 	cancelAll(slot.ring.tweens)
-	playRing(slot.ring, position - Vector3.new(0, visual.height * 0.35, 0), accent, 14, PLACE_RING_INFO)
+	playRing(slot.ring, position + Vector3.new(0, 0.35, 0), accent, 14, PLACE_RING_INFO)
 end
 
 -- ---------------------------------------------------------------------------

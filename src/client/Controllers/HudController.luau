@@ -177,9 +177,22 @@ function HudController.start()
 
 	local lastCash = getNumber(localPlayer, "Cash", 0)
 	shownValue.Value = lastCash
+	-- Ao entrar o atributo pode ainda nao ter replicado: o primeiro valor aparece sem animar.
+	local cashReady = localPlayer:GetAttribute("Cash") ~= nil
+	if not cashReady then
+		task.delay(10, function()
+			cashReady = true -- fallback: depois de 10 s as mudancas voltam a animar
+		end)
+	end
 
 	local function updateCash()
 		local cash = getNumber(localPlayer, "Cash", 0)
+		if not cashReady then
+			cashReady = true
+			lastCash = cash
+			shownValue.Value = cash
+			return
+		end
 		if cash == lastCash then
 			return
 		end

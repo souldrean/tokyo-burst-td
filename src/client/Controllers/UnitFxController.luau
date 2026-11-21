@@ -22,6 +22,7 @@ local PULSE_SPEED = 3 -- velocidade do brilho neon
 local PULSE_DEPTH = 0.3 -- o quanto o neon fica transparente no ponto mais fraco
 local BOB_HEIGHT = 0.35 -- studs que o orb sobe e desce
 local BOB_SPEED = 2.2
+local PULSE_WRITE_INTERVAL = 1 / 30 -- neon nao precisa de 60 Hz; economiza escritas de propriedade
 
 type UnitState = {
 	model: Model,
@@ -34,12 +35,14 @@ type UnitState = {
 	appliedScale: number,
 	orbWeld: Weld?, -- junta que prende o orb ao corpo (se o servidor usou Weld)
 	orbBaseC0: CFrame,
+	upLocal: Vector3, -- "cima" do mundo no espaco do Root (o Root e cilindro deitado)
 }
 
 local UnitFxController = {}
 
 local connections: { RBXScriptConnection } = {}
 local renderConnection: RBXScriptConnection? = nil
+local pulseAccumulator = 0
 local states: { [Model]: UnitState } = {}
 local statesById: { [string]: UnitState } = {}
 
@@ -58,7 +61,7 @@ local function register(model: Model, withPop: boolean)
 		return
 	end
 	local root = model:FindFirstChild("Root")
-	if not root then
+	if not root or not root:IsA("BasePart") then
 		return
 	end
 
@@ -71,7 +74,7 @@ local function register(model: Model, withPop: boolean)
 			table.insert(parts, descendant)
 			table.insert(bases, descendant.Transparency)
 			local isOrbName = string.find(string.lower(descendant.Name), "orb", 1, true) ~= nil
-			if orb == nil and (isOrbName or (kind == "Mage" and descendant.Shape == Enum.PartType.Ball)) then
+			if orb == nil and (isOrbName or (kind == "Mage" and descendant:IsA("Part") and descendant.Shape == Enum.PartType.Ball)) then
 				orb = descendant
 			end
 		end
@@ -97,6 +100,7 @@ local function register(model: Model, withPop: boolean)
 		appliedScale = 1,
 		orbWeld = weld,
 		orbBaseC0 = baseC0,
+		upLocal = root.CFrame:VectorToObjectSpace(Vector3.yAxis),
 	}
 	states[model] = state
 	local id = model:GetAttribute("Id")
@@ -152,6 +156,11 @@ end
 -- UM loop para todas as unidades. Sem tabelas novas, sem Instance.new.
 local function onRenderStep(dt: number)
 	local now = os.clock()
+	pulseAccumulator += dt
+	local writePulse = pulseAccumulator >= PULSE_WRITE_INTERVAL
+	if writePulse then
+		pulseAccumulator = 0
+	end
 	for model, state in states do
 		local scale = 1
 
@@ -184,11 +193,13 @@ local function onRenderStep(dt: number)
 		end
 
 		-- Brilho neon pulsando.
-		local wave = 0.5 + 0.5 * math.sin(now * PULSE_SPEED + state.phase)
-		local parts = state.parts
-		local bases = state.baseTransparency
-		for i = 1, state.partCount do
-			parts[i].Transparency = bases[i] + PULSE_DEPTH * wave * (1 - bases[i])
+		if writePulse then
+			local wave = 0.5 + 0.5 * math.sin(now * PULSE_SPEED + state.phase)
+			local parts = state.parts
+			local bases = state.baseTransparency
+			for i = 1, state.partCount do
+				parts[i].Transparency = bases[i] + PULSE_DEPTH * wave * (1 - bases[i])
+			end
 		end
 
 		-- Orb flutuando: mexe so no offset da junta (o ScaleTo ja escalou o C0, entao recalculamos).
@@ -196,7 +207,7 @@ local function onRenderStep(dt: number)
 		if weld then
 			local base = state.orbBaseC0
 			local bob = math.sin(now * BOB_SPEED + state.phase) * BOB_HEIGHT * state.appliedScale
-			weld.C0 = CFrame.new(base.Position * state.appliedScale + Vector3.new(0, bob, 0)) * base.Rotation
+			weld.C0 = CFrame.new(base.Position * state.appliedScale + state.upLocal * bob) * base.Rotation
 		end
 	end
 end

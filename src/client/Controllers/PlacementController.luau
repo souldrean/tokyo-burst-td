@@ -13,13 +13,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Net = require(Shared:WaitForChild("Net"))
 local Config = require(Shared:WaitForChild("Config"))
 
--- Formato de uma unidade em Config.UNITS (copiado do SPEC; so os campos que a UI usa).
-type UnitDef = {
-	displayName: string,
-	cost: number,
-	color: Color3,
-	accentColor: Color3,
-}
+local Types = require(Shared:WaitForChild("Types"))
+
+type UnitDef = Types.UnitDef
 
 type Card = {
 	kind: string,
@@ -94,7 +90,7 @@ function PlacementController.start()
 	local localPlayer = Players.LocalPlayer
 	local playerGui = localPlayer:WaitForChild("PlayerGui")
 
-	local units = Config.UNITS :: { [string]: UnitDef }
+	local units = Config.UNITS
 	local order = Config.UNIT_ORDER :: { string }
 
 	local placeRemote = Net.event("PlaceUnit")
@@ -345,7 +341,8 @@ function PlacementController.start()
 	local hint = Instance.new("TextLabel")
 	hint.Name = "Hint"
 	hint.AnchorPoint = Vector2.new(0.5, 1)
-	hint.Position = UDim2.fromScale(0.5, 0.77)
+	-- Acima do Cancel; o offset cobre o tamanho minimo (40 px) do botao em telas pequenas.
+	hint.Position = UDim2.new(0.5, 0, 0.71, -20)
 	hint.Size = UDim2.fromScale(0.34, 0.05)
 	hint.BackgroundTransparency = 1
 	hint.Font = Enum.Font.GothamBlack
@@ -366,7 +363,8 @@ function PlacementController.start()
 	local cancelButton = Instance.new("TextButton")
 	cancelButton.Name = "Cancel"
 	cancelButton.AnchorPoint = Vector2.new(0.5, 1)
-	cancelButton.Position = UDim2.fromScale(0.5, 0.835)
+	-- Base do botao logo acima da borda de cima da hotbar (0.98 - 0.2 = 0.78), nunca em cima dela.
+	cancelButton.Position = UDim2.fromScale(0.5, 0.77)
 	cancelButton.Size = UDim2.fromScale(0.16, 0.06)
 	cancelButton.BackgroundColor3 = RED
 	cancelButton.AutoButtonColor = false
@@ -448,6 +446,14 @@ function PlacementController.start()
 
 	local function exitPlacement()
 		setSelected(nil)
+	end
+
+	-- Se o Cash ainda nao replicou ao entrar, o primeiro valor nao anima (fallback de 10 s).
+	local cashReady = localPlayer:GetAttribute("Cash") ~= nil
+	if not cashReady then
+		task.delay(10, function()
+			cashReady = true
+		end)
 	end
 
 	local function updateAffordability(playPop: boolean)
@@ -768,7 +774,10 @@ function PlacementController.start()
 	table.insert(
 		connections,
 		localPlayer:GetAttributeChangedSignal("Cash"):Connect(function()
-			updateAffordability(true)
+			-- Primeiro valor pos-join nao e "ganho": atualiza sem o pop.
+			local playPop = cashReady
+			cashReady = true
+			updateAffordability(playPop)
 		end)
 	)
 	updateAffordability(false)
@@ -791,7 +800,7 @@ function PlacementController.start()
 		if not matchState then
 			return
 		end
-		local allowed = Config.PLACE_ALLOWED_STATES :: { [string]: boolean }
+		local allowed = Config.PLACE_ALLOWED_STATES
 		table.insert(
 			connections,
 			matchState:GetAttributeChangedSignal("State"):Connect(function()
