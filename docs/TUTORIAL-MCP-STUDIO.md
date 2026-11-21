@@ -38,7 +38,11 @@ Fonte oficial: https://create.roblox.com/docs/studio/mcp (o MCP agora vem **embu
    - Se não aparecer na lista: confirme que o Passo 1 foi feito e **reinicie o Studio**.
 4. Feche e abra o app Claude de novo.
 
-**Jeito manual (só se o rápido falhar):** no terminal do Windows (PowerShell), com o
+**Jeito automático (já preparado):** o projeto tem um arquivo `.mcp.json`. Ao abrir a pasta
+`tokyo-burst-td` no Claude, ele pergunta se pode usar o servidor `Roblox_Studio`: responda **sim**.
+Se isso funcionar, pule o Quick connect.
+
+**Jeito manual (só se os dois acima falharem):** no terminal do Windows (PowerShell), com o
 Claude Code de linha de comando instalado:
 ```bash
 claude mcp add --transport stdio Roblox_Studio -- cmd.exe /c %LOCALAPPDATA%\Roblox\mcp.bat
@@ -49,6 +53,7 @@ claude mcp add --transport stdio Roblox_Studio -- cmd.exe /c %LOCALAPPDATA%\Robl
 ## Passo 5: testar a conexão (3 min)
 1. No Studio: abra `build\TokyoBurstTD.rbxlx` (da pasta clonada no Passo 2).
 2. No app Claude (aba Code): abra a pasta `tokyo-burst-td` como projeto.
+   O Claude lê o `CLAUDE.md` sozinho e já sabe tudo do projeto (você não precisa reexplicar).
 3. Cole esta mensagem:
    ```
    Use o MCP Roblox_Studio: liste os Studios abertos, aperte Play no
