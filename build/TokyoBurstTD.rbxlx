@@ -14,8 +14,8 @@
 -- Config: todos os numeros "ajustaveis" do jogo ficam aqui.
 -- Assim, para mudar a velocidade de um inimigo, voce mexe em UM lugar so.
 -- table.freeze deixa a tabela somente leitura: ninguem muda um valor por engano.
--- ATENCAO: ENEMIES, WAVES, WAVE_TIMEOUT_SECONDS e INTERMISSION_SECONDS tem uma copia
--- em tools/sim_match.py. Se mudar aqui, mude la tambem (mantenha em sincronia).
+-- ATENCAO: ENEMIES, WAVES, WAVE_TIMEOUT_SECONDS, INTERMISSION_SECONDS, UNITS, START_CASH
+-- e MAX_UNITS_PER_PLAYER tem uma copia em tools/sim_match.py. Se mudar aqui, mude la tambem (mantenha em sincronia).
 
 local Types = require(script.Parent.Types)
 
@@ -94,6 +94,47 @@ local WAVES: { Types.WaveDef } = {
 	},
 }
 
+-- Unidades (semana 3). Numeros calibrados com tools/sim_match.py (cenario c).
+-- Os slots ficam a ~12-14 studs do centro da estrada, por isso os alcances sao altos.
+local UNITS: { [string]: Types.UnitDef } = {
+	Ninja = {
+		displayName = "Ninja",
+		cost = 50,
+		range = 28,
+		damage = 8,
+		cooldown = 0.5,
+		splashRadius = 0,
+		color = Color3.fromRGB(40, 44, 70),
+		accentColor = Color3.fromRGB(60, 220, 255),
+		height = 5,
+		attackStyle = "Shuriken",
+	},
+	Samurai = {
+		displayName = "Samurai",
+		cost = 160,
+		range = 18,
+		damage = 30,
+		cooldown = 1.4,
+		splashRadius = 0,
+		color = Color3.fromRGB(190, 40, 50),
+		accentColor = Color3.fromRGB(255, 200, 60),
+		height = 5.6,
+		attackStyle = "Slash",
+	},
+	Mage = {
+		displayName = "Mage",
+		cost = 260,
+		range = 24,
+		damage = 13,
+		cooldown = 1.4,
+		splashRadius = 9,
+		color = Color3.fromRGB(90, 60, 170),
+		accentColor = Color3.fromRGB(230, 90, 255),
+		height = 5.4,
+		attackStyle = "Orb",
+	},
+}
+
 local Config = {
 	-- Cubo de teste da semana 1 (codigo mantido, mas desligado).
 	PATH_PREVIEW_ENABLED = false,
@@ -111,11 +152,19 @@ local Config = {
 	SERVER_TICK_RATE = 10, -- vezes por segundo que o servidor confere se inimigos chegaram ao fim
 	MAX_ENEMIES_ALIVE = 60, -- limite de seguranca
 
+	-- Unidades e dinheiro (semana 3)
+	START_CASH = 60, -- dinheiro de cada jogador no inicio da partida
+	MAX_UNITS_PER_PLAYER = 6,
+	-- Estados em que pode colocar unidade (conjunto: chave = estado, valor = true).
+	PLACE_ALLOWED_STATES = { Intermission = true, Wave = true } :: { [string]: boolean },
+	UNIT_ORDER = { "Ninja", "Samurai", "Mage" } :: { string }, -- ordem da hotbar
+
 	-- Debug (so no Studio)
 	DEBUG_HIT_DAMAGE = 5,
 
 	ENEMIES = ENEMIES,
 	WAVES = WAVES,
+	UNITS = UNITS,
 }
 
 return table.freeze(Config)
@@ -199,7 +248,16 @@ export type PathData = {
 }
 
 -- Nomes dos RemoteEvents (a lista fica aqui para cliente e servidor concordarem).
-export type RemoteName = "EnemyDied" | "BaseHit" | "WaveStarted" | "MatchEnded" | "DebugHitEnemy"
+export type RemoteName =
+	"EnemyDied"
+	| "BaseHit"
+	| "WaveStarted"
+	| "MatchEnded"
+	| "DebugHitEnemy"
+	| "PlaceUnit"
+	| "UnitPlaced"
+	| "UnitAttacked"
+	| "Notify"
 
 -- Por que um inimigo saiu do jogo: morto por nos ou chegou no fim (vazou).
 export type DeathReason = "Killed" | "Leaked"
@@ -215,6 +273,11 @@ export type MatchStateName = "Waiting" | "Intermission" | "Wave" | "Victory" | "
 --   WaveStarted(wave: number, waveCount: number, isBoss: boolean)
 --   MatchEnded(result: MatchResult)
 --   DebugHitEnemy(id: string)   <- cliente -> servidor (so no Studio)
+--   (semana 3)
+--   PlaceUnit(kind: string, slotName: string)        <- cliente -> servidor
+--   UnitPlaced(id: string, kind: string, position: Vector3, ownerUserId: number)   <- todos
+--   UnitAttacked(id: string, kind: string, from: Vector3, to: Vector3)             <- todos
+--   Notify(text: string)                              <- servidor -> UM cliente
 export type EnemyDiedPayload = {
 	id: string,
 	reason: DeathReason,
@@ -232,6 +295,30 @@ export type EnemyDef = {
 	color: Color3,
 	eyeColor: Color3,
 	horns: boolean,
+}
+
+-- Como a unidade ataca (so muda o visual do ataque no cliente).
+export type AttackStyle = "Shuriken" | "Slash" | "Orb"
+
+-- Dados de um tipo de unidade/torre (vem do Config.UNITS).
+export type UnitDef = {
+	displayName: string,
+	cost: number,
+	range: number, -- studs, distancia no plano XZ
+	damage: number,
+	cooldown: number, -- segundos entre ataques
+	splashRadius: number, -- 0 = dano em um alvo so
+	color: Color3, -- corpo
+	accentColor: Color3, -- partes neon e projetil
+	height: number,
+	attackStyle: AttackStyle,
+}
+
+-- Uma linha do "retrato" dos inimigos vivos (EnemyService.snapshot).
+export type SnapshotEntry = {
+	id: string,
+	distance: number, -- studs andados no caminho
+	position: Vector3, -- centro do inimigo no mundo
 }
 
 -- Um grupo de inimigos do mesmo tipo dentro de uma onda.
@@ -584,6 +671,130 @@ return DebugService
 				</Item>
 				<Item class="ModuleScript" referent="RBX0000000E">
 					<Properties>
+						<string name="Name">EconomyService</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- EconomyService: dinheiro da partida de cada jogador.
+-- So o servidor mexe no dinheiro. Guardamos numa tabela (fonte da verdade) e copiamos
+-- para o atributo "Cash" do Player, so para o HUD do cliente conseguir ler.
+-- Regra co-op: quando um inimigo e MORTO, TODOS os jogadores ganham a recompensa.
+-- Este modulo NAO pode dar require no MatchService (evita require circular):
+-- o MatchService e quem chama resetAll().
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Types = require(Shared:WaitForChild("Types"))
+
+local EnemyService = require(script.Parent.EnemyService)
+
+local EconomyService = {}
+
+-- Tabela por jogador. E limpa no PlayerRemoving (senao guardaria o Player para sempre).
+local cash: { [Player]: number } = {}
+local connections: { RBXScriptConnection } = {}
+local cleanups: { () -> () } = {}
+
+-- Numero valido = nao e NaN e nao e infinito.
+local function isFinite(n: number): boolean
+	return n == n and n ~= math.huge and n ~= -math.huge
+end
+
+local function setCash(player: Player, value: number)
+	cash[player] = value
+	player:SetAttribute("Cash", value) -- o HUD le este atributo
+end
+
+local function onPlayerAdded(player: Player)
+	-- Quem entra no meio da partida tambem comeca com START_CASH.
+	setCash(player, Config.START_CASH)
+end
+
+function EconomyService.init()
+	for _, player in Players:GetPlayers() do
+		onPlayerAdded(player)
+	end
+	table.insert(connections, Players.PlayerAdded:Connect(onPlayerAdded))
+	table.insert(
+		connections,
+		Players.PlayerRemoving:Connect(function(player: Player)
+			cash[player] = nil
+		end)
+	)
+
+	-- Inimigo morto -> todo mundo ganha. Vazou (Leaked) nao da nada.
+	table.insert(
+		cleanups,
+		EnemyService.onEnemyRemoved(function(_id: string, reason: Types.DeathReason, reward: number)
+			if reason == "Killed" then
+				EconomyService.addAll(reward)
+			end
+		end)
+	)
+end
+
+function EconomyService.get(player: Player): number
+	return cash[player] or 0
+end
+
+-- Soma dinheiro (n precisa ser positivo e finito; senao ignora).
+function EconomyService.add(player: Player, n: number)
+	if not isFinite(n) or n <= 0 then
+		return
+	end
+	local current = cash[player]
+	if current == nil then
+		return -- jogador que ja saiu
+	end
+	setCash(player, current + n)
+end
+
+-- Tenta gastar. Devolve true so se tinha dinheiro (e ja desconta).
+function EconomyService.trySpend(player: Player, n: number): boolean
+	if not isFinite(n) or n < 0 then
+		return false
+	end
+	local current = cash[player]
+	if current == nil or current < n then
+		return false
+	end
+	setCash(player, current - n)
+	return true
+end
+
+function EconomyService.addAll(n: number)
+	for player in cash do
+		EconomyService.add(player, n)
+	end
+end
+
+-- Volta todo mundo para START_CASH (nova partida).
+function EconomyService.resetAll()
+	for player in cash do
+		setCash(player, Config.START_CASH)
+	end
+end
+
+-- Limpeza explicita (nao usada no jogo normal).
+function EconomyService.destroy()
+	for _, connection in connections do
+		connection:Disconnect()
+	end
+	table.clear(connections)
+	for _, cleanup in cleanups do
+		cleanup()
+	end
+	table.clear(cleanups)
+	table.clear(cash)
+end
+
+return EconomyService
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX0000000F">
+					<Properties>
 						<string name="Name">EnemyService</string>
 						<ProtectedString name="Source"><![CDATA[--!strict
 -- EnemyService: cria, guarda e remove os inimigos.
@@ -621,7 +832,8 @@ type Enemy = {
 	heightOffset: number,
 }
 
-type RemovedCallback = (id: string, reason: Types.DeathReason) -> ()
+-- reward: o que o inimigo vale (0 se vazou). Quem so quer id/reason pode ignorar o resto.
+type RemovedCallback = (id: string, reason: Types.DeathReason, reward: number) -> ()
 
 -- Tabela por id: assim nunca precisamos varrer o workspace a cada tick.
 local enemies: { [string]: Enemy } = {}
@@ -634,6 +846,9 @@ local removedListeners: { RemovedCallback } = {}
 
 -- Lista reaproveitada a cada tick (evita criar uma tabela nova 10x por segundo).
 local leakedBuffer: { string } = {}
+
+-- Lista reaproveitada do snapshot(): as linhas sao tabelas fixas que so tem os campos reescritos.
+local snapshotBuffer: { Types.SnapshotEntry } = {}
 
 local HORN_COLOR = Color3.fromRGB(235, 228, 205)
 
@@ -718,8 +933,10 @@ local function remove(id: string, reason: Types.DeathReason)
 	enemies[id] = nil
 	aliveCount -= 1
 	enemy.model:Destroy()
+	-- Vazou nao da dinheiro; so quem foi morto vale a recompensa.
+	local reward = if reason == "Killed" then enemy.reward else 0
 	for _, callback in removedListeners do
-		callback(id, reason)
+		callback(id, reason, reward)
 	end
 end
 
@@ -842,6 +1059,27 @@ function EnemyService.getDistance(id: string): number?
 	return currentDistance(enemy, workspace:GetServerTimeNow())
 end
 
+-- "Retrato" dos inimigos vivos para o combate das unidades (chamado 10x por segundo).
+-- Devolve (lista, quantidade). So as primeiras "quantidade" linhas valem: o resto e lixo
+-- de chamadas anteriores. A lista e REUSADA, entao nao guarde ela entre ticks.
+function EnemyService.snapshot(): ({ Types.SnapshotEntry }, number)
+	local now = workspace:GetServerTimeNow()
+	local count = 0
+	for id, enemy in enemies do
+		count += 1
+		local distance = currentDistance(enemy, now)
+		local entry = snapshotBuffer[count]
+		if not entry then
+			entry = { id = id, distance = distance, position = Vector3.zero }
+			snapshotBuffer[count] = entry
+		end
+		entry.id = id
+		entry.distance = distance
+		entry.position = centerPosition(enemy, distance)
+	end
+	return snapshotBuffer, count
+end
+
 -- Remove todos sem disparar eventos (usado ao terminar/reiniciar a partida).
 function EnemyService.clearAll()
 	for id, enemy in enemies do
@@ -919,7 +1157,7 @@ return EnemyService
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000000F">
+				<Item class="ModuleScript" referent="RBX00000010">
 					<Properties>
 						<string name="Name">MatchService</string>
 						<ProtectedString name="Source"><![CDATA[--!strict
@@ -937,6 +1175,8 @@ local Types = require(Shared:WaitForChild("Types"))
 
 local EnemyService = require(script.Parent.EnemyService)
 local BaseService = require(script.Parent.BaseService)
+local UnitService = require(script.Parent.UnitService)
+local EconomyService = require(script.Parent.EconomyService)
 
 local MatchService = {}
 
@@ -1075,6 +1315,8 @@ function MatchService.start()
 
 		-- Reinicia tudo para a proxima partida.
 		EnemyService.clearAll()
+		UnitService.clearAll() -- unidades somem e os slots ficam livres
+		EconomyService.resetAll() -- todo mundo volta para START_CASH
 		BaseService.reset()
 		setAttr("Wave", 0)
 		setAttr("EnemiesAlive", 0)
@@ -1093,7 +1335,7 @@ return MatchService
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000010">
+				<Item class="ModuleScript" referent="RBX00000011">
 					<Properties>
 						<string name="Name">PathPreview</string>
 						<ProtectedString name="Source"><![CDATA[--!strict
@@ -1187,7 +1429,7 @@ return PathPreview
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000011">
+				<Item class="ModuleScript" referent="RBX00000012">
 					<Properties>
 						<string name="Name">PathService</string>
 						<ProtectedString name="Source"><![CDATA[--!strict
@@ -1285,18 +1527,548 @@ return PathService
 ]]></ProtectedString>
 					</Properties>
 				</Item>
+				<Item class="ModuleScript" referent="RBX00000013">
+					<Properties>
+						<string name="Name">UnitService</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- UnitService: unidades (torres) dos jogadores.
+-- Faz: validar PlaceUnit, criar o visual, marcar slots e rodar o combate a 10 Hz.
+-- Unidades nunca se movem. O servidor decide TUDO (dano, alvo, dinheiro);
+-- o cliente so recebe eventos para desenhar os efeitos.
+-- Este modulo NAO pode dar require no MatchService (evita require circular):
+-- o estado da partida e lido direto do atributo ReplicatedStorage.MatchState.State.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Net = require(Shared:WaitForChild("Net"))
+local Types = require(Shared:WaitForChild("Types"))
+
+local EnemyService = require(script.Parent.EnemyService)
+local EconomyService = require(script.Parent.EconomyService)
+local PathService = require(script.Parent.PathService)
+
+local UnitService = {}
+
+local MAX_NAME_LENGTH = 16
+local RATE_PER_SECOND = 4 -- maximo de PlaceUnit por segundo por jogador
+local BURST = 4
+local PEDESTAL_HEIGHT = 0.3
+
+type Unit = {
+	id: string,
+	kind: string,
+	def: Types.UnitDef,
+	owner: Player,
+	slotName: string,
+	model: Model,
+	position: Vector3, -- pe da unidade (usado no alcance, plano XZ)
+	muzzle: Vector3, -- de onde sai o ataque
+	nextAttack: number, -- os.clock() em que pode atacar de novo
+}
+
+type Bucket = { tokens: number, last: number }
+
+local units: { [string]: Unit } = {} -- por id (nunca varremos o workspace)
+local slotUnit: { [string]: string } = {} -- nome do slot -> id da unidade que ocupa
+local unitCount: { [Player]: number } = {} -- quantas unidades cada jogador tem
+local buckets: { [Player]: Bucket } = {}
+local slots: { [string]: BasePart } = {} -- cache dos slots (lidos uma vez no init)
+local placementFolder: Instance? = nil
+local container: Folder? = nil
+local nextId = 0
+
+local placeRemote: RemoteEvent? = nil
+local placedRemote: RemoteEvent? = nil
+local attackedRemote: RemoteEvent? = nil
+local notifyRemote: RemoteEvent? = nil
+
+local connections: { RBXScriptConnection } = {}
+local cleanups: { () -> () } = {}
+local tickConnection: RBXScriptConnection? = nil
+
+-- Ids de inimigos mortos neste tick (o retrato do EnemyService nao sabe que morreram).
+local deadThisTick: { [string]: boolean } = {}
+
+local function notify(player: Player, text: string)
+	if notifyRemote then
+		notifyRemote:FireClient(player, text)
+	end
+end
+
+-- "Balde de fichas": cada PlaceUnit gasta 1 ficha; as fichas voltam com o tempo.
+local function allow(player: Player): boolean
+	local now = os.clock()
+	local bucket = buckets[player]
+	if not bucket then
+		bucket = { tokens = BURST, last = now }
+		buckets[player] = bucket
+	end
+	bucket.tokens = math.min(BURST, bucket.tokens + (now - bucket.last) * RATE_PER_SECOND)
+	bucket.last = now
+	if bucket.tokens < 1 then
+		return false
+	end
+	bucket.tokens -= 1
+	return true
+end
+
+-- Ponto da estrada (plano XZ) mais perto de "from". A unidade olha para la.
+local function nearestRoadPoint(from: Vector3): Vector3
+	local data = PathService.getPathData()
+	local best = from
+	local bestDistSq = math.huge
+	for i = 1, #data.points - 1 do
+		local a = data.points[i]
+		local b = data.points[i + 1]
+		local ab = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+		local lenSq = ab.X * ab.X + ab.Z * ab.Z
+		local t = 0
+		if lenSq > 1e-6 then
+			t = math.clamp(((from.X - a.X) * ab.X + (from.Z - a.Z) * ab.Z) / lenSq, 0, 1)
+		end
+		local point = Vector3.new(a.X + ab.X * t, 0, a.Z + ab.Z * t)
+		local dx = point.X - from.X
+		local dz = point.Z - from.Z
+		local distSq = dx * dx + dz * dz
+		if distSq < bestDistSq then
+			bestDistSq = distSq
+			best = point
+		end
+	end
+	return best
+end
+
+-- Peca de enfeite soldada ao Root. offset e relativo ao "baseCFrame" (o chao, ja virado).
+local function decorate(
+	model: Model,
+	root: BasePart,
+	baseCFrame: CFrame,
+	name: string,
+	shape: Enum.PartType,
+	size: Vector3,
+	color: Color3,
+	neon: boolean,
+	offset: CFrame
+)
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Shape = shape
+	part.Size = size
+	part.Color = color
+	part.Material = if neon then Enum.Material.Neon else Enum.Material.SmoothPlastic
+	part.Anchored = false
+	part.Massless = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.CFrame = baseCFrame * offset
+	part.Parent = model
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = root
+	weld.Part1 = part
+	weld.Parent = part
+end
+
+-- Disco achatado (cilindro deitado para ficar "em pe" no eixo Y).
+local FLAT = CFrame.Angles(0, 0, math.pi / 2)
+
+-- Monta o visual low-poly. baseCFrame fica no chao (topo do slot), olhando para a estrada.
+-- O Root e um pedestal fino no chao; corpo, cabeca e acessorios sao soldados nele.
+local function buildModel(id: string, kind: string, def: Types.UnitDef, baseCFrame: CFrame): (Model, BasePart)
+	local model = Instance.new("Model")
+	model.Name = id
+
+	local root = Instance.new("Part")
+	root.Name = "Root"
+	root.Shape = Enum.PartType.Cylinder
+	root.Size = Vector3.new(PEDESTAL_HEIGHT, 3.2, 3.2)
+	root.Color = def.accentColor
+	root.Material = Enum.Material.Neon
+	root.Anchored = true
+	root.CanCollide = false
+	root.CanQuery = false
+	root.CanTouch = false
+	root.CFrame = baseCFrame * CFrame.new(0, PEDESTAL_HEIGHT / 2, 0) * FLAT
+	root.Parent = model
+	model.PrimaryPart = root
+
+	local h = def.height
+	local bodyH = h * 0.45
+	local headD = h * 0.28
+	local bodyY = PEDESTAL_HEIGHT + bodyH / 2
+	local headY = PEDESTAL_HEIGHT + bodyH + headD * 0.45
+	local headTop = headY + headD / 2
+	local ball = Enum.PartType.Ball
+	local block = Enum.PartType.Block
+	local cyl = Enum.PartType.Cylinder
+
+	-- Corpo e cabeca (iguais para todos; so a cor muda).
+	decorate(model, root, baseCFrame, "Body", block, Vector3.new(2.1, bodyH, 1.5), def.color, false, CFrame.new(0, bodyY, 0))
+	decorate(model, root, baseCFrame, "Head", ball, Vector3.new(headD, headD, headD), def.color, false, CFrame.new(0, headY, 0))
+
+	if kind == "Ninja" then
+		-- Faixa neon na cabeca + cachecol neon com ponta solta atras (+Z = costas).
+		decorate(
+			model, root, baseCFrame, "Headband", block,
+			Vector3.new(headD * 1.06, 0.25, headD * 1.06), def.accentColor, true,
+			CFrame.new(0, headY + headD * 0.1, 0)
+		)
+		decorate(
+			model, root, baseCFrame, "Scarf", block,
+			Vector3.new(1.7, 0.35, 1.7), def.accentColor, true,
+			CFrame.new(0, PEDESTAL_HEIGHT + bodyH + 0.05, 0)
+		)
+		decorate(
+			model, root, baseCFrame, "ScarfTail", block,
+			Vector3.new(0.4, 0.2, 1.4), def.accentColor, true,
+			CFrame.new(0.5, PEDESTAL_HEIGHT + bodyH, 1.2) * CFrame.Angles(0.5, 0, 0)
+		)
+	elseif kind == "Samurai" then
+		-- Chapeu largo (disco) + katana neon ao lado.
+		decorate(
+			model, root, baseCFrame, "Hat", cyl,
+			Vector3.new(0.4, headD * 2.3, headD * 2.3), def.color:Lerp(Color3.new(0, 0, 0), 0.35), false,
+			CFrame.new(0, headTop - 0.05, 0) * FLAT
+		)
+		decorate(
+			model, root, baseCFrame, "Katana", block,
+			Vector3.new(0.18, h * 0.75, 0.18), def.accentColor, true,
+			CFrame.new(1.5, PEDESTAL_HEIGHT + bodyH * 0.8, -0.2) * CFrame.Angles(0, 0, -0.25)
+		)
+	elseif kind == "Mage" then
+		-- Chapeu "cone" feito de 3 discos que diminuem + orbe neon flutuando.
+		local widths = { headD * 1.9, headD * 1.4, headD * 0.8 }
+		for i, width in widths do
+			decorate(
+				model, root, baseCFrame, "HatPart" .. tostring(i), cyl,
+				Vector3.new(0.45, width, width), def.color:Lerp(Color3.new(0, 0, 0), 0.25), false,
+				CFrame.new(0, headTop + (i - 1) * 0.42, 0) * FLAT
+			)
+		end
+		decorate(
+			model, root, baseCFrame, "Orb", ball,
+			Vector3.new(1.1, 1.1, 1.1), def.accentColor, true,
+			CFrame.new(1.6, PEDESTAL_HEIGHT + bodyH + 0.6, 0)
+		)
+	end
+
+	return model, root
+end
+
+local function matchStateName(): string?
+	local folder = ReplicatedStorage:FindFirstChild("MatchState")
+	if not folder then
+		return nil
+	end
+	local value = folder:GetAttribute("State")
+	if typeof(value) == "string" then
+		return value
+	end
+	return nil
+end
+
+-- Destroi uma unidade e libera o slot dela.
+local function removeUnit(unit: Unit)
+	units[unit.id] = nil
+	if slotUnit[unit.slotName] == unit.id then
+		slotUnit[unit.slotName] = nil
+		local slot = slots[unit.slotName]
+		if slot then
+			slot:SetAttribute("Occupied", false)
+		end
+	end
+	local count = unitCount[unit.owner]
+	if count then
+		unitCount[unit.owner] = math.max(0, count - 1)
+	end
+	unit.model:Destroy()
+end
+
+local function onPlaceUnit(player: Player, kind: unknown, slotName: unknown)
+	-- 1. Limite de pedidos (antes de tudo: nem gasta CPU com spam).
+	if not allow(player) then
+		return
+	end
+	-- 2. Tipos e tamanhos. Pedido malformado e descartado em silencio (nao ajudamos exploiter).
+	if typeof(kind) ~= "string" or typeof(slotName) ~= "string" then
+		return
+	end
+	if #kind > MAX_NAME_LENGTH or #slotName > MAX_NAME_LENGTH then
+		return
+	end
+	-- 3. O tipo existe? O custo vem do Config do SERVIDOR, nunca do cliente.
+	local def = Config.UNITS[kind]
+	if not def then
+		return
+	end
+	-- 4. A partir daqui o jogador recebe um aviso do motivo.
+	local stateName = matchStateName()
+	if stateName == nil or not Config.PLACE_ALLOWED_STATES[stateName] then
+		notify(player, "Wait for the next round")
+		return
+	end
+	-- 5. O slot existe e e uma Part do mapa?
+	local slot = slots[slotName]
+	if not slot or slot.Parent ~= placementFolder then
+		return
+	end
+	if slotUnit[slotName] ~= nil or slot:GetAttribute("Occupied") == true then
+		notify(player, "Slot taken")
+		return
+	end
+	-- 6. Limite de unidades por jogador.
+	local count = unitCount[player] or 0
+	if count >= Config.MAX_UNITS_PER_PLAYER then
+		notify(player, "Unit limit reached")
+		return
+	end
+	-- 7. Dinheiro: trySpend confere e desconta numa tacada so.
+	if not EconomyService.trySpend(player, def.cost) then
+		notify(player, "Not enough cash!")
+		return
+	end
+
+	-- Tudo certo: cria a unidade em cima do slot, virada para a estrada.
+	local folder = container
+	if not folder then
+		return
+	end
+	nextId += 1
+	local id = `U{nextId}`
+	local ground = Vector3.new(slot.Position.X, slot.Position.Y + slot.Size.Y / 2, slot.Position.Z)
+	local roadPoint = nearestRoadPoint(ground)
+	local lookTarget = Vector3.new(roadPoint.X, ground.Y, roadPoint.Z)
+	local baseCFrame = CFrame.new(ground)
+	if (lookTarget - ground).Magnitude > 1e-3 then
+		baseCFrame = CFrame.lookAt(ground, lookTarget)
+	end
+
+	local model, root = buildModel(id, kind, def, baseCFrame)
+	-- Atributos ANTES de parentar: o cliente ja ve tudo certo quando o modelo aparece.
+	model:SetAttribute("Id", id)
+	model:SetAttribute("Kind", kind)
+	model:SetAttribute("Owner", player.UserId)
+	model:SetAttribute("Slot", slotName)
+	model.Parent = folder
+
+	slot:SetAttribute("Occupied", true)
+	slotUnit[slotName] = id
+	unitCount[player] = count + 1
+	units[id] = {
+		id = id,
+		kind = kind,
+		def = def,
+		owner = player,
+		slotName = slotName,
+		model = model,
+		position = ground,
+		muzzle = root.Position + Vector3.yAxis * def.height * 0.7,
+		nextAttack = 0,
+	}
+
+	if placedRemote then
+		placedRemote:FireAllClients(id, kind, ground, player.UserId)
+	end
+end
+
+local function dist2dSq(a: Vector3, b: Vector3): number
+	local dx = a.X - b.X
+	local dz = a.Z - b.Z
+	return dx * dx + dz * dz
+end
+
+-- Um tick de combate: cada unidade pronta escolhe o inimigo mais avancado no alcance.
+local function combatTick()
+	if next(units) == nil then
+		return
+	end
+	local list, count = EnemyService.snapshot() -- UMA vez por tick
+	if count == 0 then
+		return
+	end
+	table.clear(deadThisTick)
+	local now = os.clock()
+
+	for _, unit in units do
+		if now < unit.nextAttack then
+			continue
+		end
+		local def = unit.def
+		local rangeSq = def.range * def.range
+
+		-- Alvo = "first": o inimigo com MAIOR distancia andada que esta no alcance.
+		local target: Types.SnapshotEntry? = nil
+		local bestDistance = -1
+		for i = 1, count do
+			local enemy = list[i]
+			if
+				not deadThisTick[enemy.id]
+				and enemy.distance > bestDistance
+				and dist2dSq(enemy.position, unit.position) <= rangeSq
+			then
+				target = enemy
+				bestDistance = enemy.distance
+			end
+		end
+		if not target then
+			continue
+		end
+
+		unit.nextAttack = now + def.cooldown
+		local targetPosition = target.position
+		local targetId = target.id
+		EnemyService.damage(targetId, def.damage)
+
+		-- Dano em area: todo outro inimigo perto do ponto atingido.
+		if def.splashRadius > 0 then
+			local splashSq = def.splashRadius * def.splashRadius
+			for i = 1, count do
+				local other = list[i]
+				if
+					other.id ~= targetId
+					and not deadThisTick[other.id]
+					and dist2dSq(other.position, targetPosition) <= splashSq
+				then
+					EnemyService.damage(other.id, def.damage)
+				end
+			end
+		end
+
+		-- UM evento por ataque (o cliente desenha a area se for splash).
+		if attackedRemote then
+			attackedRemote:FireAllClients(unit.id, unit.kind, unit.muzzle, targetPosition)
+		end
+	end
+end
+
+function UnitService.init()
+	local folder = Instance.new("Folder")
+	folder.Name = "Units"
+	folder.Parent = workspace
+	container = folder
+
+	-- Le os slots UMA vez (o mapa ja vem pronto; init nao pode esperar/yieldar).
+	local map = workspace:FindFirstChild("Map")
+	assert(map, "UnitService: nao achei workspace.Map")
+	local placement = map:FindFirstChild("Placement")
+	assert(placement, "UnitService: nao achei workspace.Map.Placement")
+	placementFolder = placement
+	for _, child in placement:GetChildren() do
+		if child:IsA("BasePart") then
+			slots[child.Name] = child
+			child:SetAttribute("Occupied", false)
+		end
+	end
+
+	placeRemote = Net.event("PlaceUnit")
+	placedRemote = Net.event("UnitPlaced")
+	attackedRemote = Net.event("UnitAttacked")
+	notifyRemote = Net.event("Notify")
+
+	if placeRemote then
+		table.insert(connections, placeRemote.OnServerEvent:Connect(onPlaceUnit))
+	end
+
+	-- Jogador saiu: some com as unidades dele (senao o slot ficaria preso) e com o balde.
+	table.insert(
+		connections,
+		Players.PlayerRemoving:Connect(function(player: Player)
+			local mine: { Unit } = {}
+			for _, unit in units do
+				if unit.owner == player then
+					table.insert(mine, unit)
+				end
+			end
+			for _, unit in mine do
+				removeUnit(unit)
+			end
+			unitCount[player] = nil
+			buckets[player] = nil
+		end)
+	)
+
+	-- Quem morreu neste tick nao pode ser alvo de outra unidade.
+	table.insert(
+		cleanups,
+		EnemyService.onEnemyRemoved(function(id: string, reason: Types.DeathReason)
+			if reason == "Killed" then
+				deadThisTick[id] = true
+			end
+		end)
+	)
+end
+
+function UnitService.start()
+	if tickConnection then
+		return
+	end
+	-- Acumula o tempo do Heartbeat e roda o combate 10x por segundo.
+	local interval = 1 / Config.SERVER_TICK_RATE
+	local accumulated = 0
+	tickConnection = RunService.Heartbeat:Connect(function(dt: number)
+		accumulated += dt
+		if accumulated < interval then
+			return
+		end
+		accumulated %= interval
+		combatTick()
+	end)
+end
+
+-- Apaga todas as unidades, libera os slots e zera as contagens (sem eventos).
+function UnitService.clearAll()
+	for _, unit in units do
+		unit.model:Destroy()
+	end
+	table.clear(units)
+	table.clear(slotUnit)
+	table.clear(unitCount)
+	for _, slot in slots do
+		slot:SetAttribute("Occupied", false)
+	end
+end
+
+function UnitService.countOf(player: Player): number
+	return unitCount[player] or 0
+end
+
+-- Limpeza explicita (nao usada no jogo normal).
+function UnitService.destroy()
+	if tickConnection then
+		tickConnection:Disconnect()
+		tickConnection = nil
+	end
+	for _, connection in connections do
+		connection:Disconnect()
+	end
+	table.clear(connections)
+	for _, cleanup in cleanups do
+		cleanup()
+	end
+	table.clear(cleanups)
+	table.clear(buckets)
+end
+
+return UnitService
+]]></ProtectedString>
+					</Properties>
+				</Item>
 			</Item>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX00000012">
+	<Item class="StarterPlayer" referent="RBX00000014">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX00000013">
+		<Item class="StarterPlayerScripts" referent="RBX00000015">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX00000014">
+			<Item class="LocalScript" referent="RBX00000016">
 				<Properties>
 					<string name="Name">Client</string>
 					<ProtectedString name="Source"><![CDATA[--!strict
@@ -1325,11 +2097,11 @@ for _, controller in loaded do
 end
 ]]></ProtectedString>
 				</Properties>
-				<Item class="Folder" referent="RBX00000015">
+				<Item class="Folder" referent="RBX00000017">
 					<Properties>
 						<string name="Name">Controllers</string>
 					</Properties>
-					<Item class="ModuleScript" referent="RBX00000016">
+					<Item class="ModuleScript" referent="RBX00000018">
 						<Properties>
 							<string name="Name">DebugController</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -1446,7 +2218,7 @@ return DebugController
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000017">
+					<Item class="ModuleScript" referent="RBX00000019">
 						<Properties>
 							<string name="Name">EnemyRenderer</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -1809,7 +2581,7 @@ return EnemyRenderer
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000018">
+					<Item class="ModuleScript" referent="RBX0000001A">
 						<Properties>
 							<string name="Name">FxController</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -1827,6 +2599,8 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Net = require(Shared:WaitForChild("Net"))
+-- Config como "any": Config.UNITS pode ainda nao existir; lemos com cuidado e usamos cores reserva.
+local Config = require(Shared:WaitForChild("Config")) :: any
 
 -- Paleta neon (rosa, ciano, amarelo, lima, roxo).
 local PALETTE: { Color3 } = {
@@ -1849,6 +2623,16 @@ local VICTORY_PIECES = 50
 local SOUND_ENABLED = true
 local SOUND_ID = "rbxasset://sounds/electronicpingshort.wav"
 local SHAKE_BIND_NAME = "TokyoBurstCameraShake"
+
+-- Limites dos efeitos das unidades (semana 3).
+local PROJECTILE_POOL_SIZE = 40 -- maximo de projeteis ao mesmo tempo (se lotar, ignora o novo)
+local SPARK_POOL_SIZE = 12
+local RING_POOL_SIZE = 8
+local PLACE_POOL_SIZE = 4
+local STYLE_SHURIKEN = 1 -- numeros em vez de textos: comparar numero e mais barato no loop
+local STYLE_SLASH = 2
+local STYLE_ORB = 3
+local HIDDEN_POSITION = Vector3.new(0, -500, 0)
 
 -- Animacoes reaproveitadas.
 local POP_IN = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -1877,6 +2661,48 @@ type NumberSlot = {
 	tweens: { Tween },
 }
 
+type UnitVisual = {
+	style: number,
+	color: Color3,
+	accent: Color3,
+	splash: number,
+	height: number,
+}
+
+type ProjectileSlot = {
+	part: Part,
+	aux: Part, -- segunda peca: cruz da shuriken, nucleo branco do slash, brilho do orb
+	active: boolean,
+	style: number,
+	t: number,
+	duration: number,
+	from: Vector3,
+	to: Vector3,
+	base: CFrame,
+	arc: number,
+	visual: UnitVisual,
+}
+
+type SparkSlot = {
+	part: Part,
+	emitter: ParticleEmitter,
+	light: PointLight,
+	lightTween: Tween?,
+}
+
+type RingSlot = {
+	part: Part,
+	tweens: { Tween },
+}
+
+type PlaceSlot = {
+	sphere: Part,
+	pillar: Part,
+	ring: RingSlot,
+	light: PointLight,
+	tweens: { Tween },
+}
+
 local FxController = {}
 
 local connections: { RBXScriptConnection } = {}
@@ -1888,6 +2714,18 @@ local numberSlots: { NumberSlot } = {}
 local nextBurst = 1
 local nextLeak = 1
 local nextNumber = 1
+
+local projectileSlots: { ProjectileSlot } = {}
+local sparkSlots: { SparkSlot } = {}
+local ringSlots: { RingSlot } = {}
+local placeSlots: { PlaceSlot } = {}
+local nextProjectile = 1
+local nextSpark = 1
+local nextRing = 1
+local nextPlace = 1
+local activeProjectiles = 0
+local projectileConnection: RBXScriptConnection? = nil
+local visualCache: { [string]: UnitVisual } = {}
 
 local flashFrame: Frame? = nil
 local flashTween: Tween? = nil
@@ -2094,6 +2932,409 @@ local function showNumber(position: Vector3, text: string)
 	rise:Play()
 	fadeText:Play()
 	fadeStroke:Play()
+end
+
+-- ---------------------------------------------------------------------------
+-- Visual das unidades (lido do Config, com valores reserva)
+-- ---------------------------------------------------------------------------
+
+local function styleFromName(name: unknown, kind: string): number
+	if name == "Shuriken" then
+		return STYLE_SHURIKEN
+	elseif name == "Slash" then
+		return STYLE_SLASH
+	elseif name == "Orb" then
+		return STYLE_ORB
+	end
+	-- Sem Config: adivinha pelo nome do tipo para o efeito ainda fazer sentido.
+	if kind == "Ninja" then
+		return STYLE_SHURIKEN
+	elseif kind == "Samurai" then
+		return STYLE_SLASH
+	end
+	return STYLE_ORB
+end
+
+-- Guardamos o resultado numa tabela (cache) para nao recalcular a cada ataque.
+local function getVisual(kind: string): UnitVisual
+	local cached = visualCache[kind]
+	if cached then
+		return cached
+	end
+	local entry: any = nil
+	local units: any = Config.UNITS
+	if typeof(units) == "table" then
+		entry = units[kind]
+	end
+	local visual: UnitVisual
+	if typeof(entry) == "table" then
+		visual = {
+			style = styleFromName(entry.attackStyle, kind),
+			color = if typeof(entry.color) == "Color3" then entry.color else PALETTE[5],
+			accent = if typeof(entry.accentColor) == "Color3" then entry.accentColor else PALETTE[2],
+			splash = if typeof(entry.splashRadius) == "number" then entry.splashRadius else 0,
+			height = if typeof(entry.height) == "number" then entry.height else 4,
+		}
+	else
+		visual = {
+			style = styleFromName(nil, kind),
+			color = PALETTE[5],
+			accent = PALETTE[2],
+			splash = 0,
+			height = 4,
+		}
+	end
+	visualCache[kind] = visual
+	return visual
+end
+
+-- ---------------------------------------------------------------------------
+-- Faiscas de impacto (pool: 1 emissor + 1 luz por slot)
+-- ---------------------------------------------------------------------------
+
+local function makeSparkSlot(folder: Folder): SparkSlot
+	local part = Instance.new("Part")
+	part.Name = "SparkSlot"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.Size = Vector3.one * 0.2
+	part.Position = HIDDEN_POSITION
+	part.Parent = folder
+
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = part
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Enabled = false
+	emitter.Rate = 0
+	emitter.Lifetime = NumberRange.new(0.2, 0.45)
+	emitter.Speed = NumberRange.new(14, 34)
+	emitter.SpreadAngle = Vector2.new(360, 360)
+	emitter.Drag = 4
+	emitter.LightEmission = 1
+	emitter.LightInfluence = 0
+	emitter.Size = NumberSequence.new(0.55, 0)
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.6, 0.1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	emitter.Parent = attachment
+
+	local light = Instance.new("PointLight")
+	light.Range = 10
+	light.Brightness = 0
+	light.Shadows = false
+	light.Parent = part
+
+	return { part = part, emitter = emitter, light = light, lightTween = nil }
+end
+
+local function spark(position: Vector3, color: Color3, count: number)
+	local slot = sparkSlots[nextSpark]
+	nextSpark = nextSpark % #sparkSlots + 1
+	slot.part.Position = position
+	-- Particulas nascem com a cor do momento: assim cada unidade solta faiscas da sua cor.
+	slot.emitter.Color = ColorSequence.new(Color3.new(1, 1, 1):Lerp(color, 0.5), color)
+	slot.emitter:Emit(count)
+	local old = slot.lightTween
+	if old then
+		old:Cancel()
+	end
+	slot.light.Color = color
+	slot.light.Brightness = 3
+	local tween = TweenService:Create(slot.light, LIGHT_FADE, { Brightness = 0 })
+	slot.lightTween = tween
+	tween:Play()
+end
+
+-- ---------------------------------------------------------------------------
+-- Aneis de explosao (pool de cilindros finos, deitados no chao)
+-- ---------------------------------------------------------------------------
+
+local RING_INFO = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function makeRingSlot(folder: Folder): RingSlot
+	local part = Instance.new("Part")
+	part.Name = "RingSlot"
+	part.Shape = Enum.PartType.Cylinder
+	part.Material = Enum.Material.Neon
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.Size = Vector3.new(0.3, 1, 1)
+	part.Position = HIDDEN_POSITION
+	part.Parent = folder
+	return { part = part, tweens = {} }
+end
+
+-- O cilindro do Roblox tem o eixo no X; girar 90 graus em Z deixa ele "deitado" (fino na vertical).
+local FLAT = CFrame.Angles(0, 0, math.rad(90))
+
+local function playRing(slot: RingSlot, position: Vector3, color: Color3, diameter: number, info: TweenInfo)
+	cancelAll(slot.tweens)
+	local part = slot.part
+	part.Color = color
+	part.Size = Vector3.new(0.35, 1, 1)
+	part.Transparency = 0.15
+	part.CFrame = CFrame.new(position) * FLAT
+	local grow = TweenService:Create(part, info, { Size = Vector3.new(0.35, diameter, diameter), Transparency = 1 })
+	table.insert(slot.tweens, grow)
+	grow:Play()
+end
+
+local function ring(position: Vector3, color: Color3, diameter: number)
+	local slot = ringSlots[nextRing]
+	nextRing = nextRing % #ringSlots + 1
+	playRing(slot, position, color, diameter, RING_INFO)
+end
+
+-- ---------------------------------------------------------------------------
+-- Projeteis das unidades (pool de 2 pecas por slot + UM loop so enquanto houver ataque)
+-- ---------------------------------------------------------------------------
+
+local function makeEffectPart(folder: Folder, name: string): Part
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Material = Enum.Material.Neon
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.Size = Vector3.one * 0.5
+	part.Position = HIDDEN_POSITION
+	part.Parent = folder
+	return part
+end
+
+local function makeProjectileSlot(folder: Folder): ProjectileSlot
+	return {
+		part = makeEffectPart(folder, "ProjectileSlot"),
+		aux = makeEffectPart(folder, "ProjectileAux"),
+		active = false,
+		style = STYLE_SHURIKEN,
+		t = 0,
+		duration = 0.2,
+		from = Vector3.zero,
+		to = Vector3.zero,
+		base = CFrame.new(),
+		arc = 0,
+		visual = getVisual("Ninja"),
+	}
+end
+
+local function finishProjectile(slot: ProjectileSlot)
+	slot.active = false
+	slot.part.Transparency = 1
+	slot.aux.Transparency = 1
+	activeProjectiles -= 1
+	local accent = slot.visual.accent
+	if slot.style == STYLE_ORB then
+		-- Orb: anel no tamanho da area de dano + um pouco de confete.
+		local diameter = if slot.visual.splash > 0 then slot.visual.splash * 2 else 5
+		ring(slot.to, accent, diameter)
+		spark(slot.to, accent, 14)
+		burst(burstSlots, nextBurst, slot.to, 2, accent)
+		nextBurst = nextBurst % #burstSlots + 1
+	elseif slot.style == STYLE_SLASH then
+		spark(slot.to, Color3.new(1, 1, 1), 12)
+	else
+		spark(slot.to, accent, 8)
+	end
+end
+
+local function onProjectileStep(dt: number)
+	for _, slot in projectileSlots do
+		if not slot.active then
+			continue
+		end
+		slot.t += dt
+		local a = slot.t / slot.duration
+		if a >= 1 then
+			finishProjectile(slot)
+			continue
+		end
+		local style = slot.style
+		if style == STYLE_SHURIKEN then
+			local cf = CFrame.new(slot.from:Lerp(slot.to, a)) * CFrame.Angles(0, slot.t * 45, 0)
+			slot.part.CFrame = cf
+			slot.aux.CFrame = cf * CFrame.Angles(0, math.rad(90), 0)
+		elseif style == STYLE_SLASH then
+			-- Gira em volta do eixo de frente: parece um talho cruzando o inimigo.
+			local eased = 1 - (1 - a) * (1 - a)
+			local angle = -1.2 + 2.4 * eased
+			local cf = slot.base * CFrame.Angles(0, 0, angle)
+			slot.part.CFrame = cf
+			slot.aux.CFrame = cf
+			local fade = 0.1 + 0.9 * a * a
+			slot.part.Transparency = fade
+			slot.aux.Transparency = fade
+		else
+			local pos = slot.from:Lerp(slot.to, a) + Vector3.new(0, slot.arc * 4 * a * (1 - a), 0)
+			local cf = CFrame.new(pos)
+			slot.part.CFrame = cf
+			slot.aux.CFrame = cf
+		end
+	end
+	if activeProjectiles <= 0 then
+		-- Nada voando: desliga o loop (nao gasta nada parado).
+		local connection = projectileConnection
+		if connection then
+			connection:Disconnect()
+			projectileConnection = nil
+		end
+	end
+end
+
+local function launchProjectile(visual: UnitVisual, from: Vector3, to: Vector3): boolean
+	local count = #projectileSlots
+	local slot: ProjectileSlot? = nil
+	for i = 0, count - 1 do
+		local index = (nextProjectile + i - 1) % count + 1
+		local candidate = projectileSlots[index]
+		if not candidate.active then
+			slot = candidate
+			nextProjectile = index % count + 1
+			break
+		end
+	end
+	if not slot then
+		return false -- limite atingido: melhor perder um efeito do que travar o celular
+	end
+
+	local delta = to - from
+	local distance = delta.Magnitude
+	local part = slot.part
+	local aux = slot.aux
+	local accent = visual.accent
+
+	slot.visual = visual
+	slot.style = visual.style
+	slot.t = 0
+	slot.from = from
+	slot.to = to
+	part.Color = accent
+
+	if visual.style == STYLE_SHURIKEN then
+		slot.duration = math.clamp(distance / 90, 0.12, 0.2)
+		part.Shape = Enum.PartType.Block
+		aux.Shape = Enum.PartType.Block
+		part.Size = Vector3.new(1.3, 0.1, 0.3)
+		aux.Size = Vector3.new(1.3, 0.1, 0.3)
+		aux.Color = Color3.new(1, 1, 1)
+		part.Transparency = 0
+		aux.Transparency = 0
+		part.CFrame = CFrame.new(from)
+		aux.CFrame = CFrame.new(from)
+	elseif visual.style == STYLE_SLASH then
+		slot.duration = 0.2
+		local flat = Vector3.new(delta.X, 0, delta.Z)
+		if flat.Magnitude < 0.01 then
+			flat = Vector3.zAxis
+		end
+		slot.base = CFrame.lookAt(to, to + flat.Unit)
+		part.Shape = Enum.PartType.Block
+		aux.Shape = Enum.PartType.Block
+		part.Size = Vector3.new(5, 0.16, 0.6)
+		aux.Size = Vector3.new(5.4, 0.07, 0.22)
+		aux.Color = Color3.new(1, 1, 1)
+		part.Transparency = 0.1
+		aux.Transparency = 0.1
+		part.CFrame = slot.base
+		aux.CFrame = slot.base
+		spark(to, Color3.new(1, 1, 1), 4) -- clarao branco logo no inicio do talho
+	else
+		slot.duration = math.clamp(distance / 45, 0.25, 0.45)
+		slot.arc = 3 + distance * 0.15
+		part.Shape = Enum.PartType.Ball
+		aux.Shape = Enum.PartType.Ball
+		part.Size = Vector3.one * 1.4
+		aux.Size = Vector3.one * 2.6
+		aux.Color = accent
+		part.Transparency = 0
+		aux.Transparency = 0.65
+		part.CFrame = CFrame.new(from)
+		aux.CFrame = CFrame.new(from)
+	end
+
+	slot.active = true
+	activeProjectiles += 1
+	if not projectileConnection then
+		projectileConnection = RunService.Heartbeat:Connect(onProjectileStep)
+	end
+	return true
+end
+
+-- ---------------------------------------------------------------------------
+-- Explosao de luz ao colocar uma unidade (pool de esfera + pilar + anel + luz)
+-- ---------------------------------------------------------------------------
+
+local SPHERE_INFO = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local PILLAR_INFO = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local PLACE_RING_INFO = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function makePlaceSlot(folder: Folder): PlaceSlot
+	local sphere = makeEffectPart(folder, "PlaceSphere")
+	sphere.Shape = Enum.PartType.Ball
+
+	local pillar = makeEffectPart(folder, "PlacePillar")
+	pillar.Shape = Enum.PartType.Cylinder
+
+	local light = Instance.new("PointLight")
+	light.Range = 26
+	light.Brightness = 0
+	light.Shadows = false
+	light.Parent = sphere
+
+	return { sphere = sphere, pillar = pillar, ring = makeRingSlot(folder), light = light, tweens = {} }
+end
+
+local function placeExplosion(position: Vector3, visual: UnitVisual)
+	local slot = placeSlots[nextPlace]
+	nextPlace = nextPlace % #placeSlots + 1
+	cancelAll(slot.tweens)
+
+	local accent = visual.accent
+
+	-- Esfera de luz que cresce e some.
+	slot.sphere.Color = accent
+	slot.sphere.Size = Vector3.one * 1.5
+	slot.sphere.Transparency = 0.2
+	slot.sphere.Position = position
+	local grow = TweenService:Create(slot.sphere, SPHERE_INFO, { Size = Vector3.one * 11, Transparency = 1 })
+
+	-- Pilar de luz vertical (cilindro em pe: Size.X e a altura).
+	local pillarHeight = 18
+	slot.pillar.Color = Color3.new(1, 1, 1):Lerp(accent, 0.4)
+	slot.pillar.Size = Vector3.new(pillarHeight, 4, 4)
+	slot.pillar.Transparency = 0.2
+	slot.pillar.CFrame = CFrame.new(position + Vector3.new(0, pillarHeight * 0.5 - 1.5, 0)) * FLAT
+	local rise = TweenService:Create(slot.pillar, PILLAR_INFO, { Size = Vector3.new(pillarHeight * 1.4, 0.4, 0.4), Transparency = 1 })
+
+	-- Flash de luz.
+	slot.light.Color = accent
+	slot.light.Brightness = 8
+	local flash = TweenService:Create(slot.light, LIGHT_FADE, { Brightness = 0 })
+
+	table.insert(slot.tweens, grow)
+	table.insert(slot.tweens, rise)
+	table.insert(slot.tweens, flash)
+	grow:Play()
+	rise:Play()
+	flash:Play()
+
+	-- Anel no chao (usa o proprio anel do slot, reservado para esta explosao).
+	cancelAll(slot.ring.tweens)
+	playRing(slot.ring, position - Vector3.new(0, visual.height * 0.35, 0), accent, 14, PLACE_RING_INFO)
 end
 
 -- ---------------------------------------------------------------------------
@@ -2309,6 +3550,30 @@ local function onMatchEnded(result: string)
 	end
 end
 
+local function onUnitPlaced(_id: string, kind: string, position: Vector3, ownerUserId: number)
+	if typeof(position) ~= "Vector3" or typeof(kind) ~= "string" then
+		return
+	end
+	local visual = getVisual(kind)
+	placeExplosion(position, visual)
+	-- Confete da paleta toda (reaproveita o pool de confete que ja existe).
+	burst(burstSlots, nextBurst, position + Vector3.new(0, 2, 0), CONFETTI_PER_COLOR, visual.accent)
+	nextBurst = nextBurst % #burstSlots + 1
+	showNumber(position + Vector3.new(0, visual.height, 0), "NEW!")
+	playPing(0.3, 1.0, 1.3)
+	-- Tremor so para quem colocou a unidade, bem leve.
+	if ownerUserId == Players.LocalPlayer.UserId then
+		startShake(0.25, 0.25)
+	end
+end
+
+local function onUnitAttacked(_id: string, kind: string, from: Vector3, to: Vector3)
+	if typeof(kind) ~= "string" or typeof(from) ~= "Vector3" or typeof(to) ~= "Vector3" then
+		return
+	end
+	launchProjectile(getVisual(kind), from, to)
+end
+
 local function makeLabelBase(parent: Instance): (TextLabel, UIStroke, UIScale)
 	local label = Instance.new("TextLabel")
 	label.Name = "Banner"
@@ -2360,6 +3625,19 @@ function FxController.start()
 		table.insert(numberSlots, makeNumberSlot(folder))
 	end
 
+	for _ = 1, PROJECTILE_POOL_SIZE do
+		table.insert(projectileSlots, makeProjectileSlot(folder))
+	end
+	for _ = 1, SPARK_POOL_SIZE do
+		table.insert(sparkSlots, makeSparkSlot(folder))
+	end
+	for _ = 1, RING_POOL_SIZE do
+		table.insert(ringSlots, makeRingSlot(folder))
+	end
+	for _ = 1, PLACE_POOL_SIZE do
+		table.insert(placeSlots, makePlaceSlot(folder))
+	end
+
 	-- Interface dos efeitos: tela cheia (IgnoreGuiInset) para o flash cobrir tudo.
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "Fx"
@@ -2409,6 +3687,8 @@ function FxController.start()
 	table.insert(connections, Net.event("BaseHit").OnClientEvent:Connect(onBaseHit))
 	table.insert(connections, Net.event("WaveStarted").OnClientEvent:Connect(onWaveStarted))
 	table.insert(connections, Net.event("MatchEnded").OnClientEvent:Connect(onMatchEnded))
+	table.insert(connections, Net.event("UnitPlaced").OnClientEvent:Connect(onUnitPlaced))
+	table.insert(connections, Net.event("UnitAttacked").OnClientEvent:Connect(onUnitAttacked))
 
 	-- Sai do modo cinza assim que a partida deixa o estado Defeat (ex.: reiniciou).
 	local matchState = ReplicatedStorage:WaitForChild("MatchState", 30)
@@ -2427,6 +3707,11 @@ end
 -- Limpeza explicita (nao usada no jogo normal): desliga tudo e solta a camera.
 function FxController.destroy()
 	stopShake()
+	local projectileLoop = projectileConnection
+	if projectileLoop then
+		projectileLoop:Disconnect()
+		projectileConnection = nil
+	end
 	for _, connection in connections do
 		connection:Disconnect()
 	end
@@ -2443,7 +3728,7 @@ return FxController
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000019">
+					<Item class="ModuleScript" referent="RBX0000001B">
 						<Properties>
 							<string name="Name">HudController</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -2476,6 +3761,13 @@ local HudController = {}
 
 local connections: { RBXScriptConnection } = {}
 local popTweens: { [UIScale]: Tween } = {}
+
+-- Contador de dinheiro: o numero "sobe" aos poucos (count-up) em vez de pular.
+local CASH_UP_INFO = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local CASH_DOWN_INFO = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local CASH_FLASH_INFO = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local cashTween: Tween? = nil
+local cashFlashTween: Tween? = nil
 
 -- Le um atributo numero com valor padrao (atributo pode ainda nao existir).
 local function getNumber(inst: Instance, name: string, default: number): number
@@ -2544,6 +3836,7 @@ function HudController.start()
 	gui.Name = "Hud"
 	gui.ResetOnSpawn = false -- nao some quando o personagem morre
 	gui.IgnoreGuiInset = false -- respeita a barra superior do Roblox
+	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets -- foge do notch/barra do celular
 	gui.Parent = playerGui
 
 	-- Titulo pequeno no canto superior esquerdo (o centro fica para a onda e a vida).
@@ -2572,7 +3865,7 @@ function HudController.start()
 		"BuildTag",
 		UDim2.fromScale(0.01, 0.05),
 		UDim2.fromScale(0.12, 0.03),
-		"Week 2 build",
+		"Week 3 build",
 		Color3.fromRGB(200, 215, 255),
 		12,
 		16
@@ -2580,6 +3873,76 @@ function HudController.start()
 	tag.AnchorPoint = Vector2.new(0, 0)
 	tag.Font = Enum.Font.GothamBold
 	tag.TextTransparency = 0.2
+
+	-- Contador de dinheiro, topo direito. Le o atributo "Cash" do jogador (so o servidor escreve).
+	local localPlayer = Players.LocalPlayer
+	local cashLabel = makeLabel(
+		gui,
+		"CashLabel",
+		UDim2.fromScale(0.99, 0.01),
+		UDim2.fromScale(0.2, 0.06),
+		"$0",
+		YELLOW,
+		14,
+		40
+	)
+	cashLabel.AnchorPoint = Vector2.new(1, 0)
+	cashLabel.TextXAlignment = Enum.TextXAlignment.Right
+	local cashScale = Instance.new("UIScale")
+	cashScale.Parent = cashLabel
+
+	-- NumberValue so serve para o tween "contar": o texto segue o Value dele.
+	local shownValue = Instance.new("NumberValue")
+	shownValue.Name = "CashShown"
+	shownValue.Parent = cashLabel
+	local lastShown = -1
+	table.insert(
+		connections,
+		shownValue.Changed:Connect(function(value: number)
+			local rounded = math.floor(value + 0.5)
+			if rounded == lastShown then
+				return -- sem texto novo a toa
+			end
+			lastShown = rounded
+			cashLabel.Text = "$" .. rounded
+		end)
+	)
+
+	local lastCash = getNumber(localPlayer, "Cash", 0)
+	shownValue.Value = lastCash
+
+	local function updateCash()
+		local cash = getNumber(localPlayer, "Cash", 0)
+		if cash == lastCash then
+			return
+		end
+		local gained = cash > lastCash
+		lastCash = cash
+
+		local oldCount = cashTween
+		if oldCount then
+			oldCount:Cancel()
+		end
+		local count = TweenService:Create(shownValue, if gained then CASH_UP_INFO else CASH_DOWN_INFO, { Value = cash })
+		cashTween = count
+		count:Play()
+
+		local oldFlash = cashFlashTween
+		if oldFlash then
+			oldFlash:Cancel()
+		end
+		if gained then
+			popScale(cashScale, 1.35) -- ganhou: pop grande
+			cashLabel.TextColor3 = Color3.new(1, 1, 1)
+		else
+			popScale(cashScale, 0.8) -- gastou: encolhe e volta
+			cashLabel.TextColor3 = RED -- flash vermelho
+		end
+		local flash = TweenService:Create(cashLabel, CASH_FLASH_INFO, { TextColor3 = YELLOW })
+		cashFlashTween = flash
+		flash:Play()
+	end
+	table.insert(connections, localPlayer:GetAttributeChangedSignal("Cash"):Connect(updateCash))
 
 	-- Etiqueta da onda, topo centro.
 	local waveLabel = makeLabel(
@@ -2811,19 +4174,1089 @@ return HudController
 ]]></ProtectedString>
 						</Properties>
 					</Item>
+					<Item class="ModuleScript" referent="RBX0000001C">
+						<Properties>
+							<string name="Name">PlacementController</string>
+							<ProtectedString name="Source"><![CDATA[--!strict
+-- PlacementController: hotbar de unidades (embaixo) + modo de colocacao + avisos (toasts).
+-- REGRA DE OURO: o cliente NUNCA decide nada. Ele so manda PlaceUnit(kind, slotName)
+-- e desenha o que o servidor responde (atributo Cash, atributo Occupied, UnitPlaced, Notify).
+-- Mobile primeiro: tudo em Scale, alvos de toque grandes, texto com limite minimo de 12.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Net = require(Shared:WaitForChild("Net"))
+local Config = require(Shared:WaitForChild("Config"))
+
+-- Formato de uma unidade em Config.UNITS (copiado do SPEC; so os campos que a UI usa).
+type UnitDef = {
+	displayName: string,
+	cost: number,
+	color: Color3,
+	accentColor: Color3,
+}
+
+type Card = {
+	kind: string,
+	cost: number,
+	button: TextButton,
+	scale: UIScale,
+	stroke: UIStroke,
+	dim: Frame,
+	costLabel: TextLabel,
+	accent: Color3,
+	scaleTween: Tween?,
+	glowTween: Tween?,
+	dimTween: Tween?,
+	affordable: boolean,
+}
+
+type SlotLook = {
+	color: Color3,
+	transparency: number,
+}
+
+type Toast = {
+	group: CanvasGroup,
+	moveTween: Tween?,
+	fadeTween: Tween?,
+	thread: thread?,
+	dead: boolean,
+}
+
+local DARK = Color3.fromRGB(20, 12, 40)
+local PINK = Color3.fromRGB(255, 51, 153)
+local CYAN = Color3.fromRGB(0, 240, 255)
+local YELLOW = Color3.fromRGB(255, 225, 60)
+local RED = Color3.fromRGB(255, 50, 70)
+local WHITE = Color3.new(1, 1, 1)
+
+-- Vocabulario de animacao (criado uma vez so, reaproveitado).
+local FAST = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local POP = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local GLOW = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+local SLOT_PULSE = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+local TOAST_IN = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local TOAST_OUT = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+local CARD_REST = 1
+local CARD_SELECTED = 1.08
+local CARD_PRESSED = 0.92
+local DIM_AMOUNT = 0.55
+local MAX_TOASTS = 3
+local TOAST_SECONDS = 2
+local TOAST_STEP = 0.36 -- distancia vertical (escala do container) entre toasts empilhados
+local TAP_MAX_MOVE = 14 -- pixels: mais que isso o toque virou arrasto de camera, nao clique
+local TAP_MAX_TIME = 0.35
+local RAY_LENGTH = 2000
+
+-- Atalhos de teclado: a posicao na lista vira a tecla (1, 2, 3...).
+local NUMBER_KEYS: { Enum.KeyCode } = {
+	Enum.KeyCode.One,
+	Enum.KeyCode.Two,
+	Enum.KeyCode.Three,
+	Enum.KeyCode.Four,
+	Enum.KeyCode.Five,
+}
+
+local PlacementController = {}
+
+local connections: { RBXScriptConnection } = {}
+
+function PlacementController.init() end
+
+function PlacementController.start()
+	local localPlayer = Players.LocalPlayer
+	local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+	local units = Config.UNITS :: { [string]: UnitDef }
+	local order = Config.UNIT_ORDER :: { string }
+
+	local placeRemote = Net.event("PlaceUnit")
+	local placedRemote = Net.event("UnitPlaced")
+	local notifyRemote = Net.event("Notify")
+
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "Placement"
+	gui.ResetOnSpawn = false
+	gui.DisplayOrder = 5
+	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets -- nao fica embaixo do notch/home bar
+	gui.Parent = playerGui
+
+	---------------------------------------------------------------------------
+	-- Estado
+	---------------------------------------------------------------------------
+	local cards: { Card } = {}
+	local selected: Card? = nil
+	local slotFolder: Instance? = nil
+	local slotOriginals: { [BasePart]: SlotLook } = {}
+	local slotTweens: { [BasePart]: Tween } = {}
+	local slotConnections: { RBXScriptConnection } = {}
+	local toasts: { Toast } = {} -- indice 1 = mais novo
+	local touchInput: InputObject? = nil
+	local touchStart = Vector2.zero
+	local touchTime = 0
+
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Include
+
+	---------------------------------------------------------------------------
+	-- Ajudantes de tween
+	---------------------------------------------------------------------------
+	-- Cada elemento guarda o seu tween atual: cancelamos antes de criar outro,
+	-- senao dois tweens brigam pela mesma propriedade.
+	local function tweenCardScale(card: Card, target: number, info: TweenInfo)
+		local old = card.scaleTween
+		if old then
+			old:Cancel()
+		end
+		local tween = TweenService:Create(card.scale, info, { Scale = target })
+		card.scaleTween = tween
+		tween:Play()
+	end
+
+	local function restScale(card: Card): number
+		if selected == card then
+			return CARD_SELECTED
+		end
+		return CARD_REST
+	end
+
+	---------------------------------------------------------------------------
+	-- Toasts (avisos no topo)
+	---------------------------------------------------------------------------
+	local toastHolder = Instance.new("Frame")
+	toastHolder.Name = "Toasts"
+	toastHolder.AnchorPoint = Vector2.new(0.5, 0)
+	toastHolder.Position = UDim2.fromScale(0.5, 0.2)
+	toastHolder.Size = UDim2.fromScale(0.42, 0.22)
+	toastHolder.BackgroundTransparency = 1
+	toastHolder.Parent = gui
+
+	local function toastPosition(index: number): UDim2
+		return UDim2.fromScale(0.5, (index - 1) * TOAST_STEP)
+	end
+
+	local function layoutToasts()
+		for index, toast in toasts do
+			local old = toast.moveTween
+			if old then
+				old:Cancel()
+			end
+			local tween = TweenService:Create(toast.group, TOAST_IN, { Position = toastPosition(index) })
+			toast.moveTween = tween
+			tween:Play()
+		end
+	end
+
+	local function dismissToast(toast: Toast)
+		if toast.dead then
+			return
+		end
+		toast.dead = true
+		local index = table.find(toasts, toast)
+		if index then
+			table.remove(toasts, index)
+		end
+		local thread = toast.thread
+		if thread and thread ~= coroutine.running() then
+			task.cancel(thread) -- nao deixa o timer de 2s rodando a toa
+		end
+		toast.thread = nil
+		local fade = TweenService:Create(toast.group, TOAST_OUT, { GroupTransparency = 1 })
+		toast.fadeTween = fade
+		fade.Completed:Once(function()
+			toast.group:Destroy()
+		end)
+		fade:Play()
+		layoutToasts()
+	end
+
+	local function showToast(text: string)
+		-- Limite de 3 empilhados: o mais velho (final da lista) sai.
+		while #toasts >= MAX_TOASTS do
+			dismissToast(toasts[#toasts])
+		end
+
+		local group = Instance.new("CanvasGroup") -- 1 propriedade (GroupTransparency) apaga tudo junto
+		group.Name = "Toast"
+		group.AnchorPoint = Vector2.new(0.5, 0)
+		group.Size = UDim2.fromScale(1, 0.3)
+		group.Position = UDim2.fromScale(0.5, -0.5) -- comeca acima e escorrega para dentro
+		group.BackgroundColor3 = DARK
+		group.GroupTransparency = 1
+		group.Parent = toastHolder
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.3, 0)
+		corner.Parent = group
+
+		local bar = Instance.new("Frame") -- barrinha rosa na esquerda: deixa o aviso com cara de anime
+		bar.Size = UDim2.fromScale(0.025, 1)
+		bar.BackgroundColor3 = PINK
+		bar.BorderSizePixel = 0
+		bar.Parent = group
+
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(0.92, 0.7)
+		label.AnchorPoint = Vector2.new(0.5, 0.5)
+		label.Position = UDim2.fromScale(0.53, 0.5)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.GothamBlack
+		label.TextScaled = true
+		label.TextColor3 = WHITE
+		label.Text = string.sub(text, 1, 60)
+		label.Parent = group
+
+		local limit = Instance.new("UITextSizeConstraint")
+		limit.MinTextSize = 12
+		limit.MaxTextSize = 28
+		limit.Parent = label
+
+		local toast: Toast = { group = group, moveTween = nil, fadeTween = nil, thread = nil, dead = false }
+		table.insert(toasts, 1, toast)
+		layoutToasts()
+		TweenService:Create(group, FAST, { GroupTransparency = 0 }):Play()
+
+		toast.thread = task.delay(TOAST_SECONDS, function()
+			toast.thread = nil
+			dismissToast(toast)
+		end)
+	end
+
+	---------------------------------------------------------------------------
+	-- Slots: destaque LOCAL (so na nossa tela) enquanto estamos colocando
+	---------------------------------------------------------------------------
+	local function restoreSlot(slot: BasePart)
+		local tween = slotTweens[slot]
+		if tween then
+			tween:Cancel()
+			slotTweens[slot] = nil
+		end
+		local look = slotOriginals[slot]
+		if look then
+			slot.Color = look.color
+			slot.Transparency = look.transparency
+		end
+	end
+
+	local function pulseSlot(slot: BasePart)
+		local look = slotOriginals[slot]
+		if not look then
+			return
+		end
+		local tween = TweenService:Create(slot, SLOT_PULSE, {
+			Color = CYAN,
+			Transparency = math.max(0, look.transparency - 0.35),
+		})
+		slotTweens[slot] = tween
+		tween:Play()
+	end
+
+	local function endSlotHighlight()
+		-- Devolve o visual original de TODOS os slots (por isso guardamos os originais).
+		for _, conn in slotConnections do
+			conn:Disconnect()
+		end
+		table.clear(slotConnections)
+		for slot in slotOriginals do
+			restoreSlot(slot)
+		end
+		table.clear(slotOriginals)
+	end
+
+	local function beginSlotHighlight()
+		local folder = slotFolder
+		if not folder then
+			return
+		end
+		for _, child in folder:GetChildren() do
+			if child:IsA("BasePart") then
+				local slot: BasePart = child
+				slotOriginals[slot] = { color = slot.Color, transparency = slot.Transparency }
+				if slot:GetAttribute("Occupied") ~= true then
+					pulseSlot(slot) -- livre: pulsa forte
+				end -- ocupado: continua apagado (visual original)
+
+				-- Se o servidor ocupar o slot enquanto olhamos, ele para de pulsar.
+				table.insert(
+					slotConnections,
+					slot:GetAttributeChangedSignal("Occupied"):Connect(function()
+						if slot:GetAttribute("Occupied") == true then
+							restoreSlot(slot)
+						elseif not slotTweens[slot] then
+							pulseSlot(slot)
+						end
+					end)
+				)
+			end
+		end
+	end
+
+	---------------------------------------------------------------------------
+	-- Hotbar
+	---------------------------------------------------------------------------
+	local hotbar = Instance.new("Frame")
+	hotbar.Name = "Hotbar"
+	hotbar.AnchorPoint = Vector2.new(0.5, 1)
+	hotbar.Position = UDim2.fromScale(0.5, 0.98)
+	hotbar.Size = UDim2.fromScale(0.62, 0.2)
+	hotbar.BackgroundTransparency = 1
+	hotbar.Parent = gui
+
+	local hotbarLimit = Instance.new("UISizeConstraint") -- no PC nao vira uma faixa gigante
+	hotbarLimit.MaxSize = Vector2.new(760, 170)
+	hotbarLimit.Parent = hotbar
+
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0.02, 0)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = hotbar
+
+	-- Dica + botao X, aparecem so no modo de colocacao.
+	local hint = Instance.new("TextLabel")
+	hint.Name = "Hint"
+	hint.AnchorPoint = Vector2.new(0.5, 1)
+	hint.Position = UDim2.fromScale(0.5, 0.77)
+	hint.Size = UDim2.fromScale(0.34, 0.05)
+	hint.BackgroundTransparency = 1
+	hint.Font = Enum.Font.GothamBlack
+	hint.TextScaled = true
+	hint.TextColor3 = CYAN
+	hint.Text = "Tap a glowing slot"
+	hint.Visible = false
+	hint.Parent = gui
+	local hintLimit = Instance.new("UITextSizeConstraint")
+	hintLimit.MinTextSize = 12
+	hintLimit.MaxTextSize = 24
+	hintLimit.Parent = hint
+	local hintStroke = Instance.new("UIStroke")
+	hintStroke.Color = DARK
+	hintStroke.Thickness = 2
+	hintStroke.Parent = hint
+
+	local cancelButton = Instance.new("TextButton")
+	cancelButton.Name = "Cancel"
+	cancelButton.AnchorPoint = Vector2.new(0.5, 1)
+	cancelButton.Position = UDim2.fromScale(0.5, 0.835)
+	cancelButton.Size = UDim2.fromScale(0.16, 0.06)
+	cancelButton.BackgroundColor3 = RED
+	cancelButton.AutoButtonColor = false
+	cancelButton.Font = Enum.Font.GothamBlack
+	cancelButton.TextScaled = true
+	cancelButton.TextColor3 = WHITE
+	cancelButton.Text = "X  CANCEL"
+	cancelButton.Visible = false
+	cancelButton.Parent = gui
+	local cancelCorner = Instance.new("UICorner")
+	cancelCorner.CornerRadius = UDim.new(0.5, 0)
+	cancelCorner.Parent = cancelButton
+	local cancelLimit = Instance.new("UITextSizeConstraint")
+	cancelLimit.MinTextSize = 12
+	cancelLimit.MaxTextSize = 24
+	cancelLimit.Parent = cancelButton
+	local cancelSizeLimit = Instance.new("UISizeConstraint") -- alvo de toque nunca fica pequeno demais
+	cancelSizeLimit.MinSize = Vector2.new(110, 40)
+	cancelSizeLimit.Parent = cancelButton
+	local cancelScale = Instance.new("UIScale")
+	cancelScale.Parent = cancelButton
+	local cancelPop: Tween? = nil
+
+	local function popCancel()
+		local old = cancelPop
+		if old then
+			old:Cancel()
+		end
+		cancelScale.Scale = 0.6
+		local tween = TweenService:Create(cancelScale, POP, { Scale = 1 })
+		cancelPop = tween
+		tween:Play()
+	end
+
+	-- Visual de um card: selecionado = brilho pulsando + maior; normal = quieto.
+	local function renderCard(card: Card)
+		local isSelected = selected == card
+		local oldGlow = card.glowTween
+		if oldGlow then
+			oldGlow:Cancel()
+			card.glowTween = nil
+		end
+		if isSelected then
+			card.stroke.Color = WHITE
+			local glow = TweenService:Create(card.stroke, GLOW, { Thickness = 8, Color = card.accent })
+			card.glowTween = glow
+			glow:Play()
+		else
+			card.stroke.Thickness = 3
+			card.stroke.Color = card.accent
+		end
+		tweenCardScale(card, restScale(card), POP)
+	end
+
+	local function setSelected(card: Card?)
+		local previous = selected
+		if previous == card then
+			return
+		end
+		local wasActive = previous ~= nil
+		selected = card
+		if previous then
+			renderCard(previous)
+		end
+		if card then
+			renderCard(card)
+		end
+
+		local active = card ~= nil
+		hint.Visible = active
+		cancelButton.Visible = active
+		if active and not wasActive then
+			popCancel()
+			beginSlotHighlight()
+		elseif not active then
+			endSlotHighlight() -- volta o visual original dos slots
+		end
+	end
+
+	local function exitPlacement()
+		setSelected(nil)
+	end
+
+	local function updateAffordability(playPop: boolean)
+		local cash = 0
+		local value = localPlayer:GetAttribute("Cash")
+		if typeof(value) == "number" then
+			cash = value
+		end
+		for _, card in cards do
+			local affordable = cash >= card.cost
+			if affordable ~= card.affordable then
+				card.affordable = affordable
+				local oldDim = card.dimTween
+				if oldDim then
+					oldDim:Cancel()
+				end
+				local dimTween = TweenService:Create(card.dim, FAST, {
+					BackgroundTransparency = if affordable then 1 else DIM_AMOUNT,
+				})
+				card.dimTween = dimTween
+				dimTween:Play()
+				card.costLabel.TextColor3 = if affordable then YELLOW else RED
+				if affordable and playPop then
+					-- Acabou de ficar acessivel: chama atencao com um pop.
+					card.scale.Scale = restScale(card) * 1.15
+					tweenCardScale(card, restScale(card), POP)
+				end
+			end
+		end
+	end
+
+	local function makeCard(kind: string, def: UnitDef, index: number, count: number)
+		local button = Instance.new("TextButton")
+		button.Name = "Card_" .. kind
+		button.LayoutOrder = index
+		-- Largura reparte o espaco da hotbar igualmente (Scale, funciona em qualquer tela).
+		button.Size = UDim2.fromScale((1 - 0.02 * (count - 1)) / count, 0.92)
+		button.BackgroundColor3 = DARK
+		button.AutoButtonColor = false -- o feedback e o nosso (squash), nao o padrao
+		button.Text = ""
+		button.Parent = hotbar
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.14, 0)
+		corner.Parent = button
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = def.accentColor
+		stroke.Thickness = 3
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Parent = button
+
+		local uiScale = Instance.new("UIScale")
+		uiScale.Parent = button
+
+		-- "Retrato": quadrado colorido (cor da unidade) com borda neon (cor de destaque).
+		local portrait = Instance.new("Frame")
+		portrait.Name = "Portrait"
+		portrait.AnchorPoint = Vector2.new(0, 0.5)
+		portrait.Position = UDim2.fromScale(0.06, 0.5)
+		portrait.Size = UDim2.fromScale(0.3, 0.7)
+		portrait.BackgroundColor3 = def.color
+		portrait.BorderSizePixel = 0
+		portrait.Parent = button
+		local portraitAspect = Instance.new("UIAspectRatioConstraint") -- sempre quadrado
+		portraitAspect.AspectRatio = 1
+		portraitAspect.AspectType = Enum.AspectType.FitWithinMaxAxis
+		portraitAspect.Parent = portrait
+		local portraitCorner = Instance.new("UICorner")
+		portraitCorner.CornerRadius = UDim.new(0.2, 0)
+		portraitCorner.Parent = portrait
+		local portraitStroke = Instance.new("UIStroke")
+		portraitStroke.Color = def.accentColor
+		portraitStroke.Thickness = 3
+		portraitStroke.Parent = portrait
+
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Name = "Name"
+		nameLabel.Position = UDim2.fromScale(0.42, 0.1)
+		nameLabel.Size = UDim2.fromScale(0.54, 0.4)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.Font = Enum.Font.GothamBlack
+		nameLabel.TextScaled = true
+		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+		nameLabel.TextColor3 = WHITE
+		nameLabel.Text = def.displayName
+		nameLabel.Parent = button
+		local nameLimit = Instance.new("UITextSizeConstraint")
+		nameLimit.MinTextSize = 12
+		nameLimit.MaxTextSize = 26
+		nameLimit.Parent = nameLabel
+
+		local costLabel = Instance.new("TextLabel")
+		costLabel.Name = "Cost"
+		costLabel.Position = UDim2.fromScale(0.42, 0.52)
+		costLabel.Size = UDim2.fromScale(0.54, 0.36)
+		costLabel.BackgroundTransparency = 1
+		costLabel.Font = Enum.Font.GothamBlack
+		costLabel.TextScaled = true
+		costLabel.TextXAlignment = Enum.TextXAlignment.Left
+		costLabel.TextColor3 = YELLOW
+		costLabel.Text = "$" .. math.floor(def.cost)
+		costLabel.Parent = button
+		local costLimit = Instance.new("UITextSizeConstraint")
+		costLimit.MinTextSize = 12
+		costLimit.MaxTextSize = 24
+		costLimit.Parent = costLabel
+
+		-- Numero do atalho (so serve no PC, mas e pequeno e nao atrapalha).
+		if index <= #NUMBER_KEYS and not UserInputService.TouchEnabled then
+			local keyLabel = Instance.new("TextLabel")
+			keyLabel.Name = "Key"
+			keyLabel.Position = UDim2.fromScale(0.03, 0.03)
+			keyLabel.Size = UDim2.fromScale(0.12, 0.22)
+			keyLabel.BackgroundTransparency = 1
+			keyLabel.Font = Enum.Font.GothamBold
+			keyLabel.TextScaled = true
+			keyLabel.TextColor3 = Color3.fromRGB(200, 215, 255)
+			keyLabel.Text = tostring(index)
+			keyLabel.Parent = button
+			local keyLimit = Instance.new("UITextSizeConstraint")
+			keyLimit.MinTextSize = 12
+			keyLimit.MaxTextSize = 18
+			keyLimit.Parent = keyLabel
+		end
+
+		-- Camada escura por cima: dimmed (sem dinheiro) = camada visivel.
+		-- Active = false para nao roubar o clique do botao.
+		local dim = Instance.new("Frame")
+		dim.Name = "Dim"
+		dim.Size = UDim2.fromScale(1, 1)
+		dim.BackgroundColor3 = Color3.new(0, 0, 0)
+		dim.BackgroundTransparency = 1
+		dim.BorderSizePixel = 0
+		dim.Active = false
+		dim.ZIndex = 5
+		dim.Parent = button
+		local dimCorner = Instance.new("UICorner")
+		dimCorner.CornerRadius = UDim.new(0.14, 0)
+		dimCorner.Parent = dim
+
+		local card: Card = {
+			kind = kind,
+			cost = def.cost,
+			button = button,
+			scale = uiScale,
+			stroke = stroke,
+			dim = dim,
+			costLabel = costLabel,
+			accent = def.accentColor,
+			scaleTween = nil,
+			glowTween = nil,
+			dimTween = nil,
+			affordable = true,
+		}
+		table.insert(cards, card)
+
+		-- Aperta: encolhe rapido ("squash"). Solta: volta com Back (pop).
+		table.insert(
+			connections,
+			button.MouseButton1Down:Connect(function()
+				tweenCardScale(card, CARD_PRESSED, FAST)
+			end)
+		)
+		table.insert(
+			connections,
+			button.MouseLeave:Connect(function()
+				tweenCardScale(card, restScale(card), POP)
+			end)
+		)
+		table.insert(
+			connections,
+			button.Activated:Connect(function()
+				if not card.affordable and selected ~= card then
+					-- So um aviso local de UX; quem decide de verdade e o servidor.
+					showToast("Not enough cash!")
+					tweenCardScale(card, restScale(card), POP)
+					return
+				end
+				if selected == card then
+					exitPlacement() -- tocar de novo cancela
+				else
+					setSelected(card)
+				end
+				tweenCardScale(card, restScale(card), POP)
+			end)
+		)
+	end
+
+	for index, kind in order do
+		local def = units[kind]
+		if def then
+			makeCard(kind, def, index, #order)
+		else
+			warn("[PlacementController] Config.UNITS sem a unidade: " .. kind)
+		end
+	end
+
+	---------------------------------------------------------------------------
+	-- Colocar: raycast no mundo 3D so contra os slots
+	---------------------------------------------------------------------------
+	local function tryPlaceAt(screenPos: Vector2)
+		local card = selected
+		local folder = slotFolder
+		local camera = workspace.CurrentCamera
+		if not card or not folder or not camera then
+			return
+		end
+		-- ScreenPointToRay ja considera a barra superior do Roblox (inset).
+		local ray = camera:ScreenPointToRay(screenPos.X, screenPos.Y)
+		raycastParams.FilterDescendantsInstances = { folder }
+		local result = workspace:Raycast(ray.Origin, ray.Direction * RAY_LENGTH, raycastParams)
+		if not result then
+			return -- clicou no vazio: continua no modo
+		end
+		local slot = result.Instance
+		if slot.Parent ~= folder then
+			return
+		end
+		if slot:GetAttribute("Occupied") == true then
+			showToast("Slot taken")
+			return
+		end
+		-- So pedimos. Servidor valida tudo (estado, slot, limite, dinheiro) e responde.
+		placeRemote:FireServer(card.kind, slot.Name)
+		exitPlacement()
+	end
+
+	-- Cancelar
+	table.insert(
+		connections,
+		cancelButton.Activated:Connect(function()
+			exitPlacement()
+		end)
+	)
+
+	-- Entrada: gameProcessed = true quer dizer que um botao/UI ja usou o clique.
+	-- Sem isso, tocar num card tambem colocaria a unidade "atras" dele.
+	table.insert(
+		connections,
+		UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
+			if gameProcessed then
+				return
+			end
+			local inputType = input.UserInputType
+			if inputType == Enum.UserInputType.MouseButton1 then
+				if selected then
+					tryPlaceAt(Vector2.new(input.Position.X, input.Position.Y))
+				end
+			elseif inputType == Enum.UserInputType.Touch then
+				-- Toque: so conta como "clique" se soltar perto e rapido (senao e arrastar a camera).
+				touchInput = input
+				touchStart = Vector2.new(input.Position.X, input.Position.Y)
+				touchTime = os.clock()
+			elseif inputType == Enum.UserInputType.Keyboard then
+				local key = input.KeyCode
+				if key == Enum.KeyCode.Q or key == Enum.KeyCode.Escape then
+					exitPlacement()
+					return
+				end
+				local index = table.find(NUMBER_KEYS, key)
+				if index then
+					local card = cards[index]
+					if card then
+						if not card.affordable and selected ~= card then
+							showToast("Not enough cash!")
+						elseif selected == card then
+							exitPlacement()
+						else
+							setSelected(card)
+						end
+					end
+				end
+			end
+		end)
+	)
+
+	table.insert(
+		connections,
+		UserInputService.InputEnded:Connect(function(input: InputObject, _gameProcessed: boolean)
+			if input ~= touchInput then
+				return
+			end
+			touchInput = nil
+			if not selected then
+				return
+			end
+			local endPos = Vector2.new(input.Position.X, input.Position.Y)
+			if (endPos - touchStart).Magnitude <= TAP_MAX_MOVE and os.clock() - touchTime <= TAP_MAX_TIME then
+				tryPlaceAt(endPos)
+			end
+		end)
+	)
+
+	---------------------------------------------------------------------------
+	-- Respostas do servidor
+	---------------------------------------------------------------------------
+	table.insert(
+		connections,
+		notifyRemote.OnClientEvent:Connect(function(text: unknown)
+			if typeof(text) == "string" then
+				showToast(text)
+			end
+		end)
+	)
+
+	-- Se a nossa unidade foi criada e ainda estamos no modo, sai dele.
+	table.insert(
+		connections,
+		placedRemote.OnClientEvent:Connect(function(_id: unknown, _kind: unknown, _position: unknown, ownerUserId: unknown)
+			if ownerUserId == localPlayer.UserId and selected then
+				exitPlacement()
+			end
+		end)
+	)
+
+	-- Dinheiro mudou -> atualiza cards escurecidos.
+	table.insert(
+		connections,
+		localPlayer:GetAttributeChangedSignal("Cash"):Connect(function()
+			updateAffordability(true)
+		end)
+	)
+	updateAffordability(false)
+
+	-- Acha a pasta de slots (pode demorar a replicar). Sem ela o modo so nao destaca nada.
+	local map = workspace:WaitForChild("Map", 30)
+	if map then
+		local placement = map:WaitForChild("Placement", 30)
+		if placement then
+			slotFolder = placement
+		end
+	end
+	if not slotFolder then
+		warn("[PlacementController] workspace.Map.Placement nao apareceu; colocacao desativada.")
+	end
+
+	-- Se a partida entrar em estado onde nao pode colocar (ex.: Derrota), sai do modo.
+	task.spawn(function()
+		local matchState = ReplicatedStorage:WaitForChild("MatchState", 30)
+		if not matchState then
+			return
+		end
+		local allowed = Config.PLACE_ALLOWED_STATES :: { [string]: boolean }
+		table.insert(
+			connections,
+			matchState:GetAttributeChangedSignal("State"):Connect(function()
+				local state = matchState:GetAttribute("State")
+				if selected and not (typeof(state) == "string" and allowed[state]) then
+					exitPlacement()
+				end
+			end)
+		)
+	end)
+end
+
+return PlacementController
+]]></ProtectedString>
+						</Properties>
+					</Item>
+					<Item class="ModuleScript" referent="RBX0000001D">
+						<Properties>
+							<string name="Name">UnitFxController</string>
+							<ProtectedString name="Source"><![CDATA[--!strict
+-- UnitFxController: "vida" das unidades (so no cliente, so visual).
+-- Faz 3 coisas com UM unico loop de RenderStepped:
+--   1) pop-in: unidade nova cresce de 0.2 ate 1 com efeito "Back" (passa um pouco e volta);
+--   2) pulso: o ataque faz a unidade dar uma "inchada" rapida (1 -> 1.08 -> 1);
+--   3) idle: partes neon pulsam de leve e o orb do Mage flutua (se der para mexer nele).
+-- Para ficar leve no celular: listas de partes sao criadas UMA vez por unidade (no registro),
+-- e o loop nao cria tabelas nem Instances.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Net = require(Shared:WaitForChild("Net"))
+
+local POP_START_SCALE = 0.2
+local POP_DURATION = 0.45
+local PULSE_DURATION = 0.18
+local PULSE_STRENGTH = 0.08
+local PULSE_SPEED = 3 -- velocidade do brilho neon
+local PULSE_DEPTH = 0.3 -- o quanto o neon fica transparente no ponto mais fraco
+local BOB_HEIGHT = 0.35 -- studs que o orb sobe e desce
+local BOB_SPEED = 2.2
+
+type UnitState = {
+	model: Model,
+	parts: { BasePart }, -- partes neon (menos o Root)
+	baseTransparency: { number },
+	partCount: number,
+	phase: number, -- cada unidade pulsa em um ritmo diferente
+	popTime: number, -- segundos desde o inicio do pop; negativo = sem pop
+	pulseTime: number, -- segundos desde o ataque; negativo = sem pulso
+	appliedScale: number,
+	orbWeld: Weld?, -- junta que prende o orb ao corpo (se o servidor usou Weld)
+	orbBaseC0: CFrame,
+}
+
+local UnitFxController = {}
+
+local connections: { RBXScriptConnection } = {}
+local renderConnection: RBXScriptConnection? = nil
+local states: { [Model]: UnitState } = {}
+local statesById: { [string]: UnitState } = {}
+
+-- Procura o Weld que prende o orb. WeldConstraint nao tem offset editavel, entao so Weld serve.
+local function findOrbWeld(model: Model, orb: BasePart): Weld?
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("Weld") and descendant.Part1 == orb then
+			return descendant
+		end
+	end
+	return nil
+end
+
+local function register(model: Model, withPop: boolean)
+	if states[model] then
+		return
+	end
+	local root = model:FindFirstChild("Root")
+	if not root then
+		return
+	end
+
+	local parts: { BasePart } = {}
+	local bases: { number } = {}
+	local orb: BasePart? = nil
+	local kind = model:GetAttribute("Kind")
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") and descendant ~= root and descendant.Material == Enum.Material.Neon then
+			table.insert(parts, descendant)
+			table.insert(bases, descendant.Transparency)
+			local isOrbName = string.find(string.lower(descendant.Name), "orb", 1, true) ~= nil
+			if orb == nil and (isOrbName or (kind == "Mage" and descendant.Shape == Enum.PartType.Ball)) then
+				orb = descendant
+			end
+		end
+	end
+
+	local weld: Weld? = nil
+	local baseC0 = CFrame.new()
+	if orb then
+		weld = findOrbWeld(model, orb)
+		if weld then
+			baseC0 = weld.C0
+		end
+	end
+
+	local state: UnitState = {
+		model = model,
+		parts = parts,
+		baseTransparency = bases,
+		partCount = #parts,
+		phase = math.random() * math.pi * 2,
+		popTime = if withPop then 0 else -1,
+		pulseTime = -1,
+		appliedScale = 1,
+		orbWeld = weld,
+		orbBaseC0 = baseC0,
+	}
+	states[model] = state
+	local id = model:GetAttribute("Id")
+	if typeof(id) == "string" then
+		statesById[id] = state
+	end
+
+	if withPop then
+		-- Ja nasce pequena para nao piscar no tamanho cheio antes do primeiro frame do loop.
+		model:ScaleTo(POP_START_SCALE)
+		state.appliedScale = POP_START_SCALE
+	end
+end
+
+local function unregister(model: Model)
+	local state = states[model]
+	if not state then
+		return
+	end
+	states[model] = nil
+	local id = model:GetAttribute("Id")
+	if typeof(id) == "string" and statesById[id] == state then
+		statesById[id] = nil
+	end
+end
+
+local function onChildAdded(child: Instance, withPop: boolean)
+	if not child:IsA("Model") then
+		return
+	end
+	if child:FindFirstChild("Root") then
+		register(child, withPop)
+		return
+	end
+	-- O Root ainda nao chegou (streaming): espera um pouco sem travar nada.
+	task.spawn(function()
+		if child:WaitForChild("Root", 5) and child.Parent then
+			register(child, withPop)
+		end
+	end)
+end
+
+local function onUnitAttacked(id: string, _kind: string, _from: Vector3, _to: Vector3)
+	if typeof(id) ~= "string" then
+		return
+	end
+	local state = statesById[id]
+	if state then
+		state.pulseTime = 0 -- reinicia o pulso (rajada de ataques fica "vibrando")
+	end
+end
+
+-- UM loop para todas as unidades. Sem tabelas novas, sem Instance.new.
+local function onRenderStep(dt: number)
+	local now = os.clock()
+	for model, state in states do
+		local scale = 1
+
+		-- Pop-in com easing Back (calculado na mao, sem criar Tween).
+		if state.popTime >= 0 then
+			state.popTime += dt
+			local alpha = state.popTime / POP_DURATION
+			if alpha >= 1 then
+				state.popTime = -1
+			else
+				local eased = TweenService:GetValue(alpha, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+				scale = POP_START_SCALE + (1 - POP_START_SCALE) * eased
+			end
+		end
+
+		-- Pulso de ataque: seno de 0 a pi = sobe e desce uma vez.
+		if state.pulseTime >= 0 then
+			state.pulseTime += dt
+			if state.pulseTime >= PULSE_DURATION then
+				state.pulseTime = -1
+			else
+				scale *= 1 + PULSE_STRENGTH * math.sin(math.pi * state.pulseTime / PULSE_DURATION)
+			end
+		end
+
+		-- So chama ScaleTo se a escala mudou de verdade (ScaleTo mexe em todas as partes).
+		if math.abs(scale - state.appliedScale) > 0.001 then
+			model:ScaleTo(scale)
+			state.appliedScale = scale
+		end
+
+		-- Brilho neon pulsando.
+		local wave = 0.5 + 0.5 * math.sin(now * PULSE_SPEED + state.phase)
+		local parts = state.parts
+		local bases = state.baseTransparency
+		for i = 1, state.partCount do
+			parts[i].Transparency = bases[i] + PULSE_DEPTH * wave * (1 - bases[i])
+		end
+
+		-- Orb flutuando: mexe so no offset da junta (o ScaleTo ja escalou o C0, entao recalculamos).
+		local weld = state.orbWeld
+		if weld then
+			local base = state.orbBaseC0
+			local bob = math.sin(now * BOB_SPEED + state.phase) * BOB_HEIGHT * state.appliedScale
+			weld.C0 = CFrame.new(base.Position * state.appliedScale + Vector3.new(0, bob, 0)) * base.Rotation
+		end
+	end
+end
+
+function UnitFxController.init() end
+
+function UnitFxController.start()
+	local unitsFolder = workspace:WaitForChild("Units", 30)
+	if not unitsFolder then
+		warn("UnitFxController: workspace.Units nao apareceu")
+		return
+	end
+
+	-- Unidades que ja existem quando entramos: sem pop (so as novas ganham o efeito).
+	for _, child in unitsFolder:GetChildren() do
+		onChildAdded(child, false)
+	end
+	table.insert(
+		connections,
+		unitsFolder.ChildAdded:Connect(function(child)
+			onChildAdded(child, true)
+		end)
+	)
+	table.insert(
+		connections,
+		unitsFolder.ChildRemoved:Connect(function(child)
+			if child:IsA("Model") then
+				unregister(child) -- libera a unidade da tabela (senao vazaria memoria)
+			end
+		end)
+	)
+	table.insert(connections, Net.event("UnitAttacked").OnClientEvent:Connect(onUnitAttacked))
+
+	renderConnection = RunService.RenderStepped:Connect(onRenderStep)
+end
+
+-- Limpeza explicita (nao usada no jogo normal).
+function UnitFxController.destroy()
+	local loop = renderConnection
+	if loop then
+		loop:Disconnect()
+		renderConnection = nil
+	end
+	for _, connection in connections do
+		connection:Disconnect()
+	end
+	table.clear(connections)
+	table.clear(states)
+	table.clear(statesById)
+end
+
+return UnitFxController
+]]></ProtectedString>
+						</Properties>
+					</Item>
 				</Item>
 			</Item>
 		</Item>
 	</Item>
-	<Item class="Workspace" referent="RBX0000001A">
+	<Item class="Workspace" referent="RBX0000001E">
 		<Properties>
 			<string name="Name">Workspace</string>
 		</Properties>
-		<Item class="Model" referent="RBX0000001B">
+		<Item class="Model" referent="RBX0000001F">
 			<Properties>
 				<string name="Name">Map</string>
 			</Properties>
-			<Item class="Part" referent="RBX0000001C">
+			<Item class="Part" referent="RBX00000020">
 				<Properties>
 					<string name="Name">Ground</string>
 					<token name="TopSurface">0</token>
@@ -2835,11 +5268,11 @@ return HudController
 					<bool name="Anchored">true</bool>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX0000001D">
+			<Item class="Folder" referent="RBX00000021">
 				<Properties>
 					<string name="Name">Road</string>
 				</Properties>
-				<Item class="Part" referent="RBX0000001E">
+				<Item class="Part" referent="RBX00000022">
 					<Properties>
 						<string name="Name">Segment_1_2</string>
 						<token name="TopSurface">0</token>
@@ -2851,7 +5284,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000001F">
+				<Item class="Part" referent="RBX00000023">
 					<Properties>
 						<string name="Name">Segment_2_3</string>
 						<token name="TopSurface">0</token>
@@ -2863,7 +5296,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000020">
+				<Item class="Part" referent="RBX00000024">
 					<Properties>
 						<string name="Name">Segment_3_4</string>
 						<token name="TopSurface">0</token>
@@ -2875,7 +5308,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000021">
+				<Item class="Part" referent="RBX00000025">
 					<Properties>
 						<string name="Name">Segment_4_5</string>
 						<token name="TopSurface">0</token>
@@ -2887,7 +5320,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000022">
+				<Item class="Part" referent="RBX00000026">
 					<Properties>
 						<string name="Name">Segment_5_6</string>
 						<token name="TopSurface">0</token>
@@ -2899,7 +5332,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000023">
+				<Item class="Part" referent="RBX00000027">
 					<Properties>
 						<string name="Name">Segment_6_7</string>
 						<token name="TopSurface">0</token>
@@ -2911,7 +5344,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000024">
+				<Item class="Part" referent="RBX00000028">
 					<Properties>
 						<string name="Name">Segment_7_8</string>
 						<token name="TopSurface">0</token>
@@ -2923,7 +5356,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000025">
+				<Item class="Part" referent="RBX00000029">
 					<Properties>
 						<string name="Name">Joint_1</string>
 						<token name="TopSurface">0</token>
@@ -2935,7 +5368,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000026">
+				<Item class="Part" referent="RBX0000002A">
 					<Properties>
 						<string name="Name">Joint_2</string>
 						<token name="TopSurface">0</token>
@@ -2947,7 +5380,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000027">
+				<Item class="Part" referent="RBX0000002B">
 					<Properties>
 						<string name="Name">Joint_3</string>
 						<token name="TopSurface">0</token>
@@ -2959,7 +5392,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000028">
+				<Item class="Part" referent="RBX0000002C">
 					<Properties>
 						<string name="Name">Joint_4</string>
 						<token name="TopSurface">0</token>
@@ -2971,7 +5404,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000029">
+				<Item class="Part" referent="RBX0000002D">
 					<Properties>
 						<string name="Name">Joint_5</string>
 						<token name="TopSurface">0</token>
@@ -2983,7 +5416,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002A">
+				<Item class="Part" referent="RBX0000002E">
 					<Properties>
 						<string name="Name">Joint_6</string>
 						<token name="TopSurface">0</token>
@@ -2995,7 +5428,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002B">
+				<Item class="Part" referent="RBX0000002F">
 					<Properties>
 						<string name="Name">Joint_7</string>
 						<token name="TopSurface">0</token>
@@ -3007,7 +5440,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002C">
+				<Item class="Part" referent="RBX00000030">
 					<Properties>
 						<string name="Name">Joint_8</string>
 						<token name="TopSurface">0</token>
@@ -3020,11 +5453,11 @@ return HudController
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="Folder" referent="RBX0000002D">
+			<Item class="Folder" referent="RBX00000031">
 				<Properties>
 					<string name="Name">Waypoints</string>
 				</Properties>
-				<Item class="Part" referent="RBX0000002E">
+				<Item class="Part" referent="RBX00000032">
 					<Properties>
 						<string name="Name">1</string>
 						<token name="TopSurface">0</token>
@@ -3041,7 +5474,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAADwPw==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002F">
+				<Item class="Part" referent="RBX00000033">
 					<Properties>
 						<string name="Name">2</string>
 						<token name="TopSurface">0</token>
@@ -3058,7 +5491,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAAQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000030">
+				<Item class="Part" referent="RBX00000034">
 					<Properties>
 						<string name="Name">3</string>
 						<token name="TopSurface">0</token>
@@ -3075,7 +5508,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAIQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000031">
+				<Item class="Part" referent="RBX00000035">
 					<Properties>
 						<string name="Name">4</string>
 						<token name="TopSurface">0</token>
@@ -3092,7 +5525,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAQQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000032">
+				<Item class="Part" referent="RBX00000036">
 					<Properties>
 						<string name="Name">5</string>
 						<token name="TopSurface">0</token>
@@ -3109,7 +5542,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAUQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000033">
+				<Item class="Part" referent="RBX00000037">
 					<Properties>
 						<string name="Name">6</string>
 						<token name="TopSurface">0</token>
@@ -3126,7 +5559,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAYQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000034">
+				<Item class="Part" referent="RBX00000038">
 					<Properties>
 						<string name="Name">7</string>
 						<token name="TopSurface">0</token>
@@ -3143,7 +5576,7 @@ return HudController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAcQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000035">
+				<Item class="Part" referent="RBX00000039">
 					<Properties>
 						<string name="Name">8</string>
 						<token name="TopSurface">0</token>
@@ -3161,7 +5594,7 @@ return HudController
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="Part" referent="RBX00000036">
+			<Item class="Part" referent="RBX0000003A">
 				<Properties>
 					<string name="Name">EnemySpawn</string>
 					<token name="TopSurface">0</token>
@@ -3174,7 +5607,7 @@ return HudController
 					<bool name="CanCollide">false</bool>
 				</Properties>
 			</Item>
-			<Item class="Part" referent="RBX00000037">
+			<Item class="Part" referent="RBX0000003B">
 				<Properties>
 					<string name="Name">PlayerBase</string>
 					<token name="TopSurface">0</token>
@@ -3187,11 +5620,11 @@ return HudController
 					<BinaryString name="AttributesSerialize">AQAAAAkAAABNYXhIZWFsdGgGAAAAAAAAWUA=</BinaryString>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX00000038">
+			<Item class="Folder" referent="RBX0000003C">
 				<Properties>
 					<string name="Name">Buildings</string>
 				</Properties>
-				<Item class="Part" referent="RBX00000039">
+				<Item class="Part" referent="RBX0000003D">
 					<Properties>
 						<string name="Name">Building_01</string>
 						<token name="TopSurface">0</token>
@@ -3203,7 +5636,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003A">
+				<Item class="Part" referent="RBX0000003E">
 					<Properties>
 						<string name="Name">Building_02</string>
 						<token name="TopSurface">0</token>
@@ -3215,7 +5648,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003B">
+				<Item class="Part" referent="RBX0000003F">
 					<Properties>
 						<string name="Name">Building_03</string>
 						<token name="TopSurface">0</token>
@@ -3227,7 +5660,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003C">
+				<Item class="Part" referent="RBX00000040">
 					<Properties>
 						<string name="Name">Building_04</string>
 						<token name="TopSurface">0</token>
@@ -3239,7 +5672,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003D">
+				<Item class="Part" referent="RBX00000041">
 					<Properties>
 						<string name="Name">Building_05</string>
 						<token name="TopSurface">0</token>
@@ -3251,7 +5684,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003E">
+				<Item class="Part" referent="RBX00000042">
 					<Properties>
 						<string name="Name">Building_06</string>
 						<token name="TopSurface">0</token>
@@ -3263,7 +5696,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003F">
+				<Item class="Part" referent="RBX00000043">
 					<Properties>
 						<string name="Name">Building_07</string>
 						<token name="TopSurface">0</token>
@@ -3275,7 +5708,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000040">
+				<Item class="Part" referent="RBX00000044">
 					<Properties>
 						<string name="Name">Building_08</string>
 						<token name="TopSurface">0</token>
@@ -3287,7 +5720,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000041">
+				<Item class="Part" referent="RBX00000045">
 					<Properties>
 						<string name="Name">Building_09</string>
 						<token name="TopSurface">0</token>
@@ -3299,7 +5732,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000042">
+				<Item class="Part" referent="RBX00000046">
 					<Properties>
 						<string name="Name">Building_10</string>
 						<token name="TopSurface">0</token>
@@ -3311,7 +5744,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000043">
+				<Item class="Part" referent="RBX00000047">
 					<Properties>
 						<string name="Name">Building_11</string>
 						<token name="TopSurface">0</token>
@@ -3323,7 +5756,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000044">
+				<Item class="Part" referent="RBX00000048">
 					<Properties>
 						<string name="Name">Building_12</string>
 						<token name="TopSurface">0</token>
@@ -3335,7 +5768,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000045">
+				<Item class="Part" referent="RBX00000049">
 					<Properties>
 						<string name="Name">Building_13</string>
 						<token name="TopSurface">0</token>
@@ -3347,7 +5780,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000046">
+				<Item class="Part" referent="RBX0000004A">
 					<Properties>
 						<string name="Name">Building_14</string>
 						<token name="TopSurface">0</token>
@@ -3359,7 +5792,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000047">
+				<Item class="Part" referent="RBX0000004B">
 					<Properties>
 						<string name="Name">Building_15</string>
 						<token name="TopSurface">0</token>
@@ -3371,7 +5804,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000048">
+				<Item class="Part" referent="RBX0000004C">
 					<Properties>
 						<string name="Name">Building_16</string>
 						<token name="TopSurface">0</token>
@@ -3383,7 +5816,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000049">
+				<Item class="Part" referent="RBX0000004D">
 					<Properties>
 						<string name="Name">Building_17</string>
 						<token name="TopSurface">0</token>
@@ -3395,7 +5828,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004A">
+				<Item class="Part" referent="RBX0000004E">
 					<Properties>
 						<string name="Name">Building_18</string>
 						<token name="TopSurface">0</token>
@@ -3407,7 +5840,7 @@ return HudController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004B">
+				<Item class="Part" referent="RBX0000004F">
 					<Properties>
 						<string name="Name">Building_19</string>
 						<token name="TopSurface">0</token>
@@ -3420,7 +5853,7 @@ return HudController
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="SpawnLocation" referent="RBX0000004C">
+			<Item class="SpawnLocation" referent="RBX00000050">
 				<Properties>
 					<string name="Name">PlayerSpawn</string>
 					<token name="TopSurface">0</token>
@@ -3434,11 +5867,11 @@ return HudController
 					<int name="Duration">0</int>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX0000004D">
+			<Item class="Folder" referent="RBX00000051">
 				<Properties>
 					<string name="Name">Placement</string>
 				</Properties>
-				<Item class="Part" referent="RBX0000004E">
+				<Item class="Part" referent="RBX00000052">
 					<Properties>
 						<string name="Name">Slot_01</string>
 						<token name="TopSurface">0</token>
@@ -3452,7 +5885,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004F">
+				<Item class="Part" referent="RBX00000053">
 					<Properties>
 						<string name="Name">Slot_02</string>
 						<token name="TopSurface">0</token>
@@ -3466,7 +5899,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000050">
+				<Item class="Part" referent="RBX00000054">
 					<Properties>
 						<string name="Name">Slot_03</string>
 						<token name="TopSurface">0</token>
@@ -3480,7 +5913,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000051">
+				<Item class="Part" referent="RBX00000055">
 					<Properties>
 						<string name="Name">Slot_04</string>
 						<token name="TopSurface">0</token>
@@ -3494,7 +5927,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000052">
+				<Item class="Part" referent="RBX00000056">
 					<Properties>
 						<string name="Name">Slot_05</string>
 						<token name="TopSurface">0</token>
@@ -3508,7 +5941,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000053">
+				<Item class="Part" referent="RBX00000057">
 					<Properties>
 						<string name="Name">Slot_06</string>
 						<token name="TopSurface">0</token>
@@ -3522,7 +5955,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000054">
+				<Item class="Part" referent="RBX00000058">
 					<Properties>
 						<string name="Name">Slot_07</string>
 						<token name="TopSurface">0</token>
@@ -3536,7 +5969,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000055">
+				<Item class="Part" referent="RBX00000059">
 					<Properties>
 						<string name="Name">Slot_08</string>
 						<token name="TopSurface">0</token>
@@ -3550,7 +5983,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000056">
+				<Item class="Part" referent="RBX0000005A">
 					<Properties>
 						<string name="Name">Slot_09</string>
 						<token name="TopSurface">0</token>
@@ -3564,7 +5997,7 @@ return HudController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000057">
+				<Item class="Part" referent="RBX0000005B">
 					<Properties>
 						<string name="Name">Slot_10</string>
 						<token name="TopSurface">0</token>

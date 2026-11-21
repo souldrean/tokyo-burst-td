@@ -13,6 +13,8 @@ local Types = require(Shared:WaitForChild("Types"))
 
 local EnemyService = require(script.Parent.EnemyService)
 local BaseService = require(script.Parent.BaseService)
+local UnitService = require(script.Parent.UnitService)
+local EconomyService = require(script.Parent.EconomyService)
 
 local MatchService = {}
 
@@ -151,6 +153,8 @@ function MatchService.start()
 
 		-- Reinicia tudo para a proxima partida.
 		EnemyService.clearAll()
+		UnitService.clearAll() -- unidades somem e os slots ficam livres
+		EconomyService.resetAll() -- todo mundo volta para START_CASH
 		BaseService.reset()
 		setAttr("Wave", 0)
 		setAttr("EnemiesAlive", 0)
