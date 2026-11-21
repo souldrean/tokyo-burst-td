@@ -271,7 +271,9 @@ local function onRenderStep()
 	for _, entry in entries do
 		if entry.root then
 			local distance = EnemyMath.distanceAt(entry.baseDistance, entry.baseTime, entry.speed, now)
-			local bob = math.sin(clock * BOB_SPEED + entry.phase) * BOB_HEIGHT
+			-- (sin * 0.5 + 0.5) vai de 0 a 1: o inimigo so sobe, nunca afunda no chao.
+			-- O 0.1 extra deixa ele acima da estrada (que tem 0.1 de altura).
+			local bob = 0.1 + (math.sin(clock * BOB_SPEED + entry.phase) * 0.5 + 0.5) * BOB_HEIGHT
 			local position = PathMath.positionAt(data, distance) + Vector3.new(0, entry.heightOffset + bob, 0)
 			local direction = PathMath.directionAt(data, distance)
 			entry.model:PivotTo(CFrame.lookAt(position, position + direction))
