@@ -8,7 +8,12 @@ Rode com:  python3 -I tools/sim_match.py
 
 Cenarios:
   (a) todo inimigo morre quando chega a 40% do caminho (torres boas);
-  (b) ninguem morre (quanto tempo ate a base sem defesa cair?).
+  (b) ninguem morre (quanto tempo ate a base sem defesa cair?);
+  (c) UM jogador competente: ganha dinheiro com os kills, compra unidades com a
+      regra "melhor valor primeiro" e vemos se a base sobrevive (semana 3).
+
+ATENCAO (semana 3): UNITS, START_CASH, MAX_UNITS_PER_PLAYER e os campos health/reward
+de ENEMIES tambem sao copia de src/shared/Config.luau.
 """
 
 PATH_LENGTH = 640.0  # studs (caminho do mapa, aprox.)
@@ -17,13 +22,28 @@ BASE_MAX_HEALTH = 100
 WAVE_TIMEOUT_SECONDS = 15
 KILL_FRACTION = 0.4
 
-# kind -> (speed, baseDamage)  (health/reward nao importam para o tempo)
+# kind -> (speed, baseDamage, health, reward)
 ENEMIES = {
-    "Grunt": (20, 5),
-    "Runner": (32, 4),
-    "Tank": (14, 12),
-    "Oni": (12, 40),
+    "Grunt": (20, 5, 20, 5),
+    "Runner": (32, 4, 12, 4),
+    "Tank": (14, 12, 90, 15),
+    "Oni": (12, 40, 600, 100),
 }
+
+# --- Semana 3: unidades (copia de Config.UNITS) ---
+START_CASH = 60
+MAX_UNITS_PER_PLAYER = 6
+# kind -> (cost, range, damage, cooldown, splashRadius)
+UNITS = {
+    "Ninja": (50, 28, 7, 0.5, 0),
+    "Samurai": (110, 18, 40, 1.2, 0),
+    "Mage": (200, 24, 14, 1.6, 9),
+}
+UNIT_ORDER = ["Ninja", "Samurai", "Mage"]
+
+# Aproximacoes do cenario (c) (nao existem no Config):
+SPLASH_MULT = 1.6  # um tiro de area acerta em media 1.6 inimigos
+OVERKILL_EFF = 0.85  # parte do dano que nao e desperdicada em inimigos ja quase mortos
 
 # Cada onda = lista de grupos (kind, count, interval). Grupos saem em sequencia.
 WAVES = [
@@ -91,6 +111,68 @@ def scenario_b():
     return None, None
 
 
+def unit_value(kind):
+    """Valor = dano por segundo * alcance (mais alcance = mais tempo atirando) / custo."""
+    cost, rng, dmg, cd, splash = UNITS[kind]
+    mult = SPLASH_MULT if splash > 0 else 1.0
+    return dmg / cd * mult * rng / cost
+
+
+def buy_greedy(cash, owned):
+    """Compra a unidade de melhor valor que cabe no dinheiro, ate o limite."""
+    while len(owned) < MAX_UNITS_PER_PLAYER:
+        options = [k for k in UNIT_ORDER if UNITS[k][0] <= cash]
+        if not options:
+            break
+        best = max(options, key=unit_value)
+        # Se sobra slot e uma unidade melhor e quase alcancavel, espera juntar (nao compra a pior).
+        cash -= UNITS[best][0]
+        owned.append(best)
+    return cash
+
+
+def wave_capacity(wave, owned):
+    """Dano total que as unidades conseguem causar nesta onda (estimativa)."""
+    offs, spawn_dur = spawn_offsets(wave)
+    total = 0.0
+    for u in owned:
+        _, rng, dmg, cd, splash = UNITS[u]
+        dps = dmg / cd * (SPLASH_MULT if splash > 0 else 1.0)
+        # Tempo em que ha inimigo no alcance: cada passagem dura range*2/velocidade
+        # (~50% do alcance dentro do caminho), mas a unidade so atira em um por vez.
+        windows = sum(rng * 2 / ENEMIES[k][0] for k, _ in offs)
+        max_win = max(rng * 2 / ENEMIES[k][0] for k, _ in offs)
+        active = min(windows, spawn_dur + max_win)
+        total += dps * active * OVERKILL_EFF
+    return total
+
+
+def scenario_c():
+    cash = START_CASH
+    owned = []
+    cash = buy_greedy(cash, owned)
+    first_buy = UNITS[owned[0]][0] if owned else None
+    base = float(BASE_MAX_HEALTH)
+    rows = []
+    for i, wave in enumerate(WAVES):
+        offs, spawn_dur = spawn_offsets(wave)
+        hp_total = sum(ENEMIES[k][2] for k, _ in offs)
+        reward_total = sum(ENEMIES[k][3] for k, _ in offs)
+        dmg_total = sum(ENEMIES[k][1] for k, _ in offs)
+        cap = wave_capacity(wave, owned)
+        frac = min(1.0, cap / hp_total)
+        base -= (1 - frac) * dmg_total
+        cash += frac * reward_total
+        # DPS "necessario" = vida total / duracao da onda (spawn + passagem).
+        need = hp_total / (spawn_dur + max(UNITS[owned[0]][1] * 2 / ENEMIES[k][0] for k, _ in offs) if owned else spawn_dur)
+        have = cap / (spawn_dur + 1e-9)
+        rows.append((i + 1, round(cash), len(owned), have, need, frac, max(base, 0.0)))
+        if base <= 0:
+            break
+        cash = buy_greedy(cash, owned)
+    return rows, base, owned
+
+
 def main():
     rows, total = scenario_a()
     print("Cenario (a): inimigos morrem a %d%% do caminho" % int(KILL_FRACTION * 100))
@@ -104,6 +186,18 @@ def main():
         print("Cenario (b): a base sobreviveu sem defesa (ajuste os numeros!)")
     else:
         print("Cenario (b): sem defesa, a base morre aos %.1f s, na onda %d" % (t, wave))
+
+    rows, base, owned = scenario_c()
+    print()
+    print("Cenario (c): 1 jogador, START_CASH=%d, compra o melhor valor (limite %d unidades)"
+          % (START_CASH, MAX_UNITS_PER_PLAYER))
+    print("Onda | cash antes de comprar | unidades | DPS efetivo | DPS necessario | mortos | base hp")
+    for n, c, u, have, need, frac, hp in rows:
+        print("%4d | %21d | %8d | %11.1f | %14.1f | %5.0f%% | %7.1f" % (n, c, u, have, need, frac * 100, hp))
+    if base > 0:
+        print("Cenario (c): base SOBREVIVE com %.0f%% de vida. Unidades: %s" % (base, ", ".join(owned)))
+    else:
+        print("Cenario (c): base CAI na onda %d. (ajuste os numeros!)" % rows[-1][0])
 
 
 main()
