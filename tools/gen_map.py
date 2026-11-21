@@ -69,18 +69,31 @@ def inside_ground(a, margin=0.0):
 def part(name, cls, size, pos, color, material, anchored=True, props=None, attrs=None):
     p = {
         "Size": [r2(s) for s in size],
-        "CFrame": {"position": [r2(v) for v in pos],
-                   "orientation": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]},
+        # O Rojo exige CFrame com tipo explicito ({"CFrame": {...}});
+        # sem o embrulho ele recusa o arquivo inteiro.
+        "CFrame": {"CFrame": {"position": [r2(v) for v in pos],
+                              "orientation": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}},
         "Color": [r3(c) for c in color],
         "Material": material,
         "Anchored": anchored,
     }
     if props:
         p.update(props)
-    node = {"Name": name, "ClassName": cls, "Properties": p, "Children": []}
     if attrs:
-        node["Attributes"] = attrs
-    return node
+        # O Rojo 7.4 ignora "Attributes" no topo do no (sem avisar!).
+        # O formato que ele aceita e dentro de Properties, com tipo explicito.
+        p["Attributes"] = {"Attributes": {k: typed_attr(v) for k, v in attrs.items()}}
+    return {"Name": name, "ClassName": cls, "Properties": p, "Children": []}
+
+
+def typed_attr(value):
+    if isinstance(value, bool):
+        return {"Bool": value}
+    if isinstance(value, (int, float)):
+        return {"Float64": float(value)}
+    if isinstance(value, str):
+        return {"String": value}
+    raise ValueError(f"atributo com tipo nao suportado: {value!r}")
 
 
 def folder(name, children):

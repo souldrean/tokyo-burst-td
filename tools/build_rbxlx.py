@@ -108,9 +108,16 @@ def from_path(path: Path, name: str) -> Inst:
 
 def model_from_json(data: dict, name: str | None = None) -> Inst:
     inst = Inst(data.get("ClassName", "Folder"), name or data.get("Name", "Instance"))
-    for key, value in (data.get("Properties") or {}).items():
+    props = dict(data.get("Properties") or {})
+    # Formato do Rojo: Properties.Attributes = {"Attributes": {nome: {Tipo: valor}}}
+    attrs = dict(data.get("Attributes") or {})
+    rojo_attrs = props.pop("Attributes", None)
+    if isinstance(rojo_attrs, dict):
+        for key, typed in (rojo_attrs.get("Attributes") or {}).items():
+            attrs[key] = next(iter(typed.values())) if isinstance(typed, dict) else typed
+    for key, value in props.items():
         inst.props[key] = classify(key, value)
-    for key, value in (data.get("Attributes") or {}).items():
+    for key, value in attrs.items():
         if not isinstance(value, (bool, int, float, str)):
             raise ValueError(f"atributo {key} tem tipo nao suportado: {value!r}")
         inst.attrs[key] = value
@@ -123,6 +130,9 @@ def classify(key: str, value: object) -> tuple[str, object]:
     if key == "Size":
         return ("vector3", value)
     if key == "CFrame":
+        # Aceita o formato explicito do Rojo ({"CFrame": {...}}) e o antigo.
+        if isinstance(value, dict) and "CFrame" in value:
+            value = value["CFrame"]
         return ("cframe", value)
     if key == "Color":
         return ("color", value)

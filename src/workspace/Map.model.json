@@ -11,28 +11,30 @@
           220.0
         ],
         "CFrame": {
-          "position": [
-            0.0,
-            -0.5,
-            0.0
-          ],
-          "orientation": [
-            [
-              1,
-              0,
-              0
+          "CFrame": {
+            "position": [
+              0.0,
+              -0.5,
+              0.0
             ],
-            [
-              0,
-              1,
-              0
-            ],
-            [
-              0,
-              0,
-              1
+            "orientation": [
+              [
+                1,
+                0,
+                0
+              ],
+              [
+                0,
+                1,
+                0
+              ],
+              [
+                0,
+                0,
+                1
+              ]
             ]
-          ]
+          }
         },
         "Color": [
           0.62,
@@ -58,28 +60,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                -25.0,
-                0.0,
-                -80.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -25.0,
+                  0.0,
+                  -80.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -101,28 +105,30 @@
               50.0
             ],
             "CFrame": {
-              "position": [
-                40.0,
-                0.0,
-                -55.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  40.0,
+                  0.0,
+                  -55.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -144,28 +150,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                -10.0,
-                0.0,
-                -30.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -10.0,
+                  0.0,
+                  -30.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -187,28 +195,30 @@
               50.0
             ],
             "CFrame": {
-              "position": [
-                -60.0,
-                0.0,
-                -5.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -60.0,
+                  0.0,
+                  -5.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -230,28 +240,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                0.0,
-                0.0,
-                20.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  0.0,
+                  0.0,
+                  20.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -273,28 +285,30 @@
               50.0
             ],
             "CFrame": {
-              "position": [
-                60.0,
-                0.0,
-                45.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  60.0,
+                  0.0,
+                  45.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -316,28 +330,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                -10.0,
-                0.0,
-                70.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -10.0,
+                  0.0,
+                  70.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -359,28 +375,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                -90.0,
-                0.0,
-                -80.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -90.0,
+                  0.0,
+                  -80.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -402,28 +420,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                40.0,
-                0.0,
-                -80.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  40.0,
+                  0.0,
+                  -80.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -445,28 +465,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                40.0,
-                0.0,
-                -30.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  40.0,
+                  0.0,
+                  -30.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -488,28 +510,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                -60.0,
-                0.0,
-                -30.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -60.0,
+                  0.0,
+                  -30.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -531,28 +555,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                -60.0,
-                0.0,
-                20.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -60.0,
+                  0.0,
+                  20.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -574,28 +600,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                60.0,
-                0.0,
-                20.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  60.0,
+                  0.0,
+                  20.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -617,28 +645,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                60.0,
-                0.0,
-                70.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  60.0,
+                  0.0,
+                  70.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -660,28 +690,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                -80.0,
-                0.0,
-                70.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -80.0,
+                  0.0,
+                  70.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.18,
@@ -709,28 +741,30 @@
               1.0
             ],
             "CFrame": {
-              "position": [
-                -90.0,
-                1.0,
-                -80.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -90.0,
+                  1.0,
+                  -80.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -742,12 +776,16 @@
             "Transparency": 1,
             "CanCollide": false,
             "CanQuery": false,
-            "CanTouch": false
+            "CanTouch": false,
+            "Attributes": {
+              "Attributes": {
+                "Index": {
+                  "Float64": 1.0
+                }
+              }
+            }
           },
-          "Children": [],
-          "Attributes": {
-            "Index": 1
-          }
+          "Children": []
         },
         {
           "Name": "2",
@@ -759,28 +797,30 @@
               1.0
             ],
             "CFrame": {
-              "position": [
-                40.0,
-                1.0,
-                -80.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  40.0,
+                  1.0,
+                  -80.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -792,12 +832,16 @@
             "Transparency": 1,
             "CanCollide": false,
             "CanQuery": false,
-            "CanTouch": false
+            "CanTouch": false,
+            "Attributes": {
+              "Attributes": {
+                "Index": {
+                  "Float64": 2.0
+                }
+              }
+            }
           },
-          "Children": [],
-          "Attributes": {
-            "Index": 2
-          }
+          "Children": []
         },
         {
           "Name": "3",
@@ -809,28 +853,30 @@
               1.0
             ],
             "CFrame": {
-              "position": [
-                40.0,
-                1.0,
-                -30.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  40.0,
+                  1.0,
+                  -30.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -842,12 +888,16 @@
             "Transparency": 1,
             "CanCollide": false,
             "CanQuery": false,
-            "CanTouch": false
+            "CanTouch": false,
+            "Attributes": {
+              "Attributes": {
+                "Index": {
+                  "Float64": 3.0
+                }
+              }
+            }
           },
-          "Children": [],
-          "Attributes": {
-            "Index": 3
-          }
+          "Children": []
         },
         {
           "Name": "4",
@@ -859,28 +909,30 @@
               1.0
             ],
             "CFrame": {
-              "position": [
-                -60.0,
-                1.0,
-                -30.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -60.0,
+                  1.0,
+                  -30.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -892,12 +944,16 @@
             "Transparency": 1,
             "CanCollide": false,
             "CanQuery": false,
-            "CanTouch": false
+            "CanTouch": false,
+            "Attributes": {
+              "Attributes": {
+                "Index": {
+                  "Float64": 4.0
+                }
+              }
+            }
           },
-          "Children": [],
-          "Attributes": {
-            "Index": 4
-          }
+          "Children": []
         },
         {
           "Name": "5",
@@ -909,28 +965,30 @@
               1.0
             ],
             "CFrame": {
-              "position": [
-                -60.0,
-                1.0,
-                20.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -60.0,
+                  1.0,
+                  20.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -942,12 +1000,16 @@
             "Transparency": 1,
             "CanCollide": false,
             "CanQuery": false,
-            "CanTouch": false
+            "CanTouch": false,
+            "Attributes": {
+              "Attributes": {
+                "Index": {
+                  "Float64": 5.0
+                }
+              }
+            }
           },
-          "Children": [],
-          "Attributes": {
-            "Index": 5
-          }
+          "Children": []
         },
         {
           "Name": "6",
@@ -959,28 +1021,30 @@
               1.0
             ],
             "CFrame": {
-              "position": [
-                60.0,
-                1.0,
-                20.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  60.0,
+                  1.0,
+                  20.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -992,12 +1056,16 @@
             "Transparency": 1,
             "CanCollide": false,
             "CanQuery": false,
-            "CanTouch": false
+            "CanTouch": false,
+            "Attributes": {
+              "Attributes": {
+                "Index": {
+                  "Float64": 6.0
+                }
+              }
+            }
           },
-          "Children": [],
-          "Attributes": {
-            "Index": 6
-          }
+          "Children": []
         },
         {
           "Name": "7",
@@ -1009,28 +1077,30 @@
               1.0
             ],
             "CFrame": {
-              "position": [
-                60.0,
-                1.0,
-                70.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  60.0,
+                  1.0,
+                  70.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -1042,12 +1112,16 @@
             "Transparency": 1,
             "CanCollide": false,
             "CanQuery": false,
-            "CanTouch": false
+            "CanTouch": false,
+            "Attributes": {
+              "Attributes": {
+                "Index": {
+                  "Float64": 7.0
+                }
+              }
+            }
           },
-          "Children": [],
-          "Attributes": {
-            "Index": 7
-          }
+          "Children": []
         },
         {
           "Name": "8",
@@ -1059,28 +1133,30 @@
               1.0
             ],
             "CFrame": {
-              "position": [
-                -80.0,
-                1.0,
-                70.0
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -80.0,
+                  1.0,
+                  70.0
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -1092,12 +1168,16 @@
             "Transparency": 1,
             "CanCollide": false,
             "CanQuery": false,
-            "CanTouch": false
+            "CanTouch": false,
+            "Attributes": {
+              "Attributes": {
+                "Index": {
+                  "Float64": 8.0
+                }
+              }
+            }
           },
-          "Children": [],
-          "Attributes": {
-            "Index": 8
-          }
+          "Children": []
         }
       ]
     },
@@ -1111,28 +1191,30 @@
           10.0
         ],
         "CFrame": {
-          "position": [
-            -90.0,
-            0.3,
-            -80.0
-          ],
-          "orientation": [
-            [
-              1,
-              0,
-              0
+          "CFrame": {
+            "position": [
+              -90.0,
+              0.3,
+              -80.0
             ],
-            [
-              0,
-              1,
-              0
-            ],
-            [
-              0,
-              0,
-              1
+            "orientation": [
+              [
+                1,
+                0,
+                0
+              ],
+              [
+                0,
+                1,
+                0
+              ],
+              [
+                0,
+                0,
+                1
+              ]
             ]
-          ]
+          }
         },
         "Color": [
           1.0,
@@ -1155,28 +1237,30 @@
           14.0
         ],
         "CFrame": {
-          "position": [
-            -80.0,
-            4.0,
-            70.0
-          ],
-          "orientation": [
-            [
-              1,
-              0,
-              0
+          "CFrame": {
+            "position": [
+              -80.0,
+              4.0,
+              70.0
             ],
-            [
-              0,
-              1,
-              0
-            ],
-            [
-              0,
-              0,
-              1
+            "orientation": [
+              [
+                1,
+                0,
+                0
+              ],
+              [
+                0,
+                1,
+                0
+              ],
+              [
+                0,
+                0,
+                1
+              ]
             ]
-          ]
+          }
         },
         "Color": [
           0.2,
@@ -1184,12 +1268,16 @@
           1.0
         ],
         "Material": "Neon",
-        "Anchored": true
+        "Anchored": true,
+        "Attributes": {
+          "Attributes": {
+            "MaxHealth": {
+              "Float64": 100.0
+            }
+          }
+        }
       },
-      "Children": [],
-      "Attributes": {
-        "MaxHealth": 100
-      }
+      "Children": []
     },
     {
       "Name": "Buildings",
@@ -1205,28 +1293,30 @@
               10.0
             ],
             "CFrame": {
-              "position": [
-                -35.57,
-                28.0,
-                95.49
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -35.57,
+                  28.0,
+                  95.49
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.576,
@@ -1248,28 +1338,30 @@
               10.0
             ],
             "CFrame": {
-              "position": [
-                61.91,
-                15.0,
-                97.02
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  61.91,
+                  15.0,
+                  97.02
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.634,
@@ -1291,28 +1383,30 @@
               13.0
             ],
             "CFrame": {
-              "position": [
-                70.32,
-                22.5,
-                -26.56
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  70.32,
+                  22.5,
+                  -26.56
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.638,
@@ -1334,28 +1428,30 @@
               10.0
             ],
             "CFrame": {
-              "position": [
-                25.87,
-                25.5,
-                -9.6
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  25.87,
+                  25.5,
+                  -9.6
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.709,
@@ -1377,28 +1473,30 @@
               15.0
             ],
             "CFrame": {
-              "position": [
-                59.62,
-                25.0,
-                -76.12
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  59.62,
+                  25.0,
+                  -76.12
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.523,
@@ -1420,28 +1518,30 @@
               15.0
             ],
             "CFrame": {
-              "position": [
-                -58.68,
-                24.0,
-                89.82
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -58.68,
+                  24.0,
+                  89.82
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.525,
@@ -1463,28 +1563,30 @@
               14.0
             ],
             "CFrame": {
-              "position": [
-                86.29,
-                11.0,
-                -43.74
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  86.29,
+                  11.0,
+                  -43.74
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.561,
@@ -1506,28 +1608,30 @@
               16.0
             ],
             "CFrame": {
-              "position": [
-                38.11,
-                15.5,
-                90.86
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  38.11,
+                  15.5,
+                  90.86
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.72,
@@ -1549,28 +1653,30 @@
               13.0
             ],
             "CFrame": {
-              "position": [
-                48.99,
-                29.0,
-                -5.33
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  48.99,
+                  29.0,
+                  -5.33
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.657,
@@ -1592,28 +1698,30 @@
               10.0
             ],
             "CFrame": {
-              "position": [
-                -4.27,
-                6.5,
-                49.51
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -4.27,
+                  6.5,
+                  49.51
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.612,
@@ -1635,28 +1743,30 @@
               18.0
             ],
             "CFrame": {
-              "position": [
-                -79.81,
-                10.0,
-                -32.93
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -79.81,
+                  10.0,
+                  -32.93
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.66,
@@ -1678,28 +1788,30 @@
               16.0
             ],
             "CFrame": {
-              "position": [
-                95.4,
-                23.5,
-                52.51
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  95.4,
+                  23.5,
+                  52.51
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.628,
@@ -1721,28 +1833,30 @@
               10.0
             ],
             "CFrame": {
-              "position": [
-                93.16,
-                17.0,
-                -61.2
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  93.16,
+                  17.0,
+                  -61.2
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.464,
@@ -1764,28 +1878,30 @@
               16.0
             ],
             "CFrame": {
-              "position": [
-                92.86,
-                26.5,
-                -78.52
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  92.86,
+                  26.5,
+                  -78.52
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.635,
@@ -1807,28 +1923,30 @@
               17.0
             ],
             "CFrame": {
-              "position": [
-                90.9,
-                18.5,
-                83.03
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  90.9,
+                  18.5,
+                  83.03
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.457,
@@ -1850,28 +1968,30 @@
               14.0
             ],
             "CFrame": {
-              "position": [
-                -3.22,
-                8.5,
-                99.1
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -3.22,
+                  8.5,
+                  99.1
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.443,
@@ -1893,28 +2013,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                -75.93,
-                23.5,
-                -100.2
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -75.93,
+                  23.5,
+                  -100.2
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.479,
@@ -1936,28 +2058,30 @@
               18.0
             ],
             "CFrame": {
-              "position": [
-                -100.08,
-                29.0,
-                22.89
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -100.08,
+                  29.0,
+                  22.89
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.65,
@@ -1979,28 +2103,30 @@
               12.0
             ],
             "CFrame": {
-              "position": [
-                -95.63,
-                22.0,
-                47.76
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -95.63,
+                  22.0,
+                  47.76
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               0.616,
@@ -2024,28 +2150,30 @@
           12.0
         ],
         "CFrame": {
-          "position": [
-            -12.06,
-            0.5,
-            -5.6
-          ],
-          "orientation": [
-            [
-              1,
-              0,
-              0
+          "CFrame": {
+            "position": [
+              -12.06,
+              0.5,
+              -5.6
             ],
-            [
-              0,
-              1,
-              0
-            ],
-            [
-              0,
-              0,
-              1
+            "orientation": [
+              [
+                1,
+                0,
+                0
+              ],
+              [
+                0,
+                1,
+                0
+              ],
+              [
+                0,
+                0,
+                1
+              ]
             ]
-          ]
+          }
         },
         "Color": [
           0.35,
@@ -2073,28 +2201,30 @@
               8.0
             ],
             "CFrame": {
-              "position": [
-                -53.64,
-                0.1,
-                -67.23
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -53.64,
+                  0.1,
+                  -67.23
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -2118,28 +2248,30 @@
               8.0
             ],
             "CFrame": {
-              "position": [
-                0.63,
-                0.1,
-                -66.44
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  0.63,
+                  0.1,
+                  -66.44
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -2163,28 +2295,30 @@
               8.0
             ],
             "CFrame": {
-              "position": [
-                27.13,
-                0.1,
-                -57.51
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  27.13,
+                  0.1,
+                  -57.51
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -2208,28 +2342,30 @@
               8.0
             ],
             "CFrame": {
-              "position": [
-                -8.98,
-                0.1,
-                -42.55
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -8.98,
+                  0.1,
+                  -42.55
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -2253,28 +2389,30 @@
               8.0
             ],
             "CFrame": {
-              "position": [
-                -46.83,
-                0.1,
-                -15.64
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -46.83,
+                  0.1,
+                  -15.64
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -2298,28 +2436,30 @@
               8.0
             ],
             "CFrame": {
-              "position": [
-                -33.4,
-                0.1,
-                32.88
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -33.4,
+                  0.1,
+                  32.88
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -2343,28 +2483,30 @@
               8.0
             ],
             "CFrame": {
-              "position": [
-                35.39,
-                0.1,
-                6.5
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  35.39,
+                  0.1,
+                  6.5
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -2388,28 +2530,30 @@
               8.0
             ],
             "CFrame": {
-              "position": [
-                72.82,
-                0.1,
-                41.12
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  72.82,
+                  0.1,
+                  41.12
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -2433,28 +2577,30 @@
               8.0
             ],
             "CFrame": {
-              "position": [
-                18.46,
-                0.1,
-                56.95
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  18.46,
+                  0.1,
+                  56.95
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
@@ -2478,28 +2624,30 @@
               8.0
             ],
             "CFrame": {
-              "position": [
-                -56.7,
-                0.1,
-                56.55
-              ],
-              "orientation": [
-                [
-                  1,
-                  0,
-                  0
+              "CFrame": {
+                "position": [
+                  -56.7,
+                  0.1,
+                  56.55
                 ],
-                [
-                  0,
-                  1,
-                  0
-                ],
-                [
-                  0,
-                  0,
-                  1
+                "orientation": [
+                  [
+                    1,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    1
+                  ]
                 ]
-              ]
+              }
             },
             "Color": [
               1.0,
