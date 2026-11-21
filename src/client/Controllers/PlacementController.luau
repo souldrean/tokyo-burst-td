@@ -814,4 +814,12 @@ function PlacementController.start()
 	end)
 end
 
+-- Desliga todas as conexoes (mesmo padrao dos outros controllers).
+function PlacementController.destroy()
+	for _, connection in connections do
+		connection:Disconnect()
+	end
+	table.clear(connections)
+end
+
 return PlacementController

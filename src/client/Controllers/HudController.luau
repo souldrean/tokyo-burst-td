@@ -450,4 +450,13 @@ function HudController.start()
 	)
 end
 
+-- Desliga todas as conexoes (mesmo padrao dos outros controllers).
+-- Sem isso a lista "connections" so cresce e nunca e usada.
+function HudController.destroy()
+	for _, connection in connections do
+		connection:Disconnect()
+	end
+	table.clear(connections)
+end
+
 return HudController

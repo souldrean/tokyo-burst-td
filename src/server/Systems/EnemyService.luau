@@ -76,7 +76,7 @@ end
 
 -- Monta o visual "demonio": corpo em bloco + 2 olhos Neon + chifres (Tank/Oni).
 -- Feito pelo SERVIDOR uma vez no spawn; depois so os clientes movem a copia local.
-local function buildModel(id: string, kind: string, def: Types.EnemyDef, startCFrame: CFrame): Model
+local function buildModel(id: string, _kind: string, def: Types.EnemyDef, startCFrame: CFrame): Model
 	local model = Instance.new("Model")
 	model.Name = id
 

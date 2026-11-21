@@ -922,7 +922,7 @@ end
 -- Eventos do servidor
 -- ---------------------------------------------------------------------------
 
-local function onEnemyDied(id: string, reason: string, position: Vector3, reward: number)
+local function onEnemyDied(_id: string, reason: string, position: Vector3, reward: number)
 	if typeof(position) ~= "Vector3" then
 		return
 	end
