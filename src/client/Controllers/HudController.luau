@@ -29,6 +29,13 @@ local HudController = {}
 local connections: { RBXScriptConnection } = {}
 local popTweens: { [UIScale]: Tween } = {}
 
+-- Contador de dinheiro: o numero "sobe" aos poucos (count-up) em vez de pular.
+local CASH_UP_INFO = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local CASH_DOWN_INFO = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local CASH_FLASH_INFO = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local cashTween: Tween? = nil
+local cashFlashTween: Tween? = nil
+
 -- Le um atributo numero com valor padrao (atributo pode ainda nao existir).
 local function getNumber(inst: Instance, name: string, default: number): number
 	local value = inst:GetAttribute(name)
@@ -96,6 +103,7 @@ function HudController.start()
 	gui.Name = "Hud"
 	gui.ResetOnSpawn = false -- nao some quando o personagem morre
 	gui.IgnoreGuiInset = false -- respeita a barra superior do Roblox
+	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets -- foge do notch/barra do celular
 	gui.Parent = playerGui
 
 	-- Titulo pequeno no canto superior esquerdo (o centro fica para a onda e a vida).
@@ -124,7 +132,7 @@ function HudController.start()
 		"BuildTag",
 		UDim2.fromScale(0.01, 0.05),
 		UDim2.fromScale(0.12, 0.03),
-		"Week 2 build",
+		"Week 3 build",
 		Color3.fromRGB(200, 215, 255),
 		12,
 		16
@@ -132,6 +140,76 @@ function HudController.start()
 	tag.AnchorPoint = Vector2.new(0, 0)
 	tag.Font = Enum.Font.GothamBold
 	tag.TextTransparency = 0.2
+
+	-- Contador de dinheiro, topo direito. Le o atributo "Cash" do jogador (so o servidor escreve).
+	local localPlayer = Players.LocalPlayer
+	local cashLabel = makeLabel(
+		gui,
+		"CashLabel",
+		UDim2.fromScale(0.99, 0.01),
+		UDim2.fromScale(0.2, 0.06),
+		"$0",
+		YELLOW,
+		14,
+		40
+	)
+	cashLabel.AnchorPoint = Vector2.new(1, 0)
+	cashLabel.TextXAlignment = Enum.TextXAlignment.Right
+	local cashScale = Instance.new("UIScale")
+	cashScale.Parent = cashLabel
+
+	-- NumberValue so serve para o tween "contar": o texto segue o Value dele.
+	local shownValue = Instance.new("NumberValue")
+	shownValue.Name = "CashShown"
+	shownValue.Parent = cashLabel
+	local lastShown = -1
+	table.insert(
+		connections,
+		shownValue.Changed:Connect(function(value: number)
+			local rounded = math.floor(value + 0.5)
+			if rounded == lastShown then
+				return -- sem texto novo a toa
+			end
+			lastShown = rounded
+			cashLabel.Text = "$" .. rounded
+		end)
+	)
+
+	local lastCash = getNumber(localPlayer, "Cash", 0)
+	shownValue.Value = lastCash
+
+	local function updateCash()
+		local cash = getNumber(localPlayer, "Cash", 0)
+		if cash == lastCash then
+			return
+		end
+		local gained = cash > lastCash
+		lastCash = cash
+
+		local oldCount = cashTween
+		if oldCount then
+			oldCount:Cancel()
+		end
+		local count = TweenService:Create(shownValue, if gained then CASH_UP_INFO else CASH_DOWN_INFO, { Value = cash })
+		cashTween = count
+		count:Play()
+
+		local oldFlash = cashFlashTween
+		if oldFlash then
+			oldFlash:Cancel()
+		end
+		if gained then
+			popScale(cashScale, 1.35) -- ganhou: pop grande
+			cashLabel.TextColor3 = Color3.new(1, 1, 1)
+		else
+			popScale(cashScale, 0.8) -- gastou: encolhe e volta
+			cashLabel.TextColor3 = RED -- flash vermelho
+		end
+		local flash = TweenService:Create(cashLabel, CASH_FLASH_INFO, { TextColor3 = YELLOW })
+		cashFlashTween = flash
+		flash:Play()
+	end
+	table.insert(connections, localPlayer:GetAttributeChangedSignal("Cash"):Connect(updateCash))
 
 	-- Etiqueta da onda, topo centro.
 	local waveLabel = makeLabel(

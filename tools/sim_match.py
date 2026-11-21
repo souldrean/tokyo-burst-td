@@ -35,15 +35,16 @@ START_CASH = 60
 MAX_UNITS_PER_PLAYER = 6
 # kind -> (cost, range, damage, cooldown, splashRadius)
 UNITS = {
-    "Ninja": (50, 28, 7, 0.5, 0),
-    "Samurai": (110, 18, 40, 1.2, 0),
-    "Mage": (200, 24, 14, 1.6, 9),
+    "Ninja": (50, 28, 8, 0.5, 0),
+    "Samurai": (160, 18, 30, 1.4, 0),
+    "Mage": (260, 24, 13, 1.4, 9),
 }
 UNIT_ORDER = ["Ninja", "Samurai", "Mage"]
 
 # Aproximacoes do cenario (c) (nao existem no Config):
 SPLASH_MULT = 1.6  # um tiro de area acerta em media 1.6 inimigos
-OVERKILL_EFF = 0.85  # parte do dano que nao e desperdicada em inimigos ja quase mortos
+BUILD_ORDER = ["Ninja", "Ninja", "Samurai", "Mage", "Samurai", "Mage"]  # ordem de compra do jogador
+OVERKILL_EFF = 0.65  # parte do dano que nao e desperdicada em inimigos ja quase mortos
 
 # Cada onda = lista de grupos (kind, count, interval). Grupos saem em sequencia.
 WAVES = [
@@ -118,16 +119,21 @@ def unit_value(kind):
     return dmg / cd * mult * rng / cost
 
 
+def unit_power(kind):
+    """Poder bruto = dano por segundo * alcance (dps com splash conta mais)."""
+    _, rng, dmg, cd, splash = UNITS[kind]
+    return dmg / cd * (SPLASH_MULT if splash > 0 else 1.0) * rng
+
+
 def buy_greedy(cash, owned):
-    """Compra a unidade de melhor valor que cabe no dinheiro, ate o limite."""
+    """Jogador competente: segue uma ordem de compra fixa e compra o proximo item
+    assim que o dinheiro der (nao ha venda na semana 3, entao nao desperdica slot)."""
     while len(owned) < MAX_UNITS_PER_PLAYER:
-        options = [k for k in UNIT_ORDER if UNITS[k][0] <= cash]
-        if not options:
+        nxt = BUILD_ORDER[len(owned)]
+        if UNITS[nxt][0] > cash:
             break
-        best = max(options, key=unit_value)
-        # Se sobra slot e uma unidade melhor e quase alcancavel, espera juntar (nao compra a pior).
-        cash -= UNITS[best][0]
-        owned.append(best)
+        cash -= UNITS[nxt][0]
+        owned.append(nxt)
     return cash
 
 
@@ -189,7 +195,7 @@ def main():
 
     rows, base, owned = scenario_c()
     print()
-    print("Cenario (c): 1 jogador, START_CASH=%d, compra o melhor valor (limite %d unidades)"
+    print("Cenario (c): 1 jogador, START_CASH=%d, segue a ordem de compra (limite %d unidades)"
           % (START_CASH, MAX_UNITS_PER_PLAYER))
     print("Onda | cash antes de comprar | unidades | DPS efetivo | DPS necessario | mortos | base hp")
     for n, c, u, have, need, frac, hp in rows:

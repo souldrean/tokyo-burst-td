@@ -13,6 +13,8 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Net = require(Shared:WaitForChild("Net"))
+-- Config como "any": Config.UNITS pode ainda nao existir; lemos com cuidado e usamos cores reserva.
+local Config = require(Shared:WaitForChild("Config")) :: any
 
 -- Paleta neon (rosa, ciano, amarelo, lima, roxo).
 local PALETTE: { Color3 } = {
@@ -35,6 +37,16 @@ local VICTORY_PIECES = 50
 local SOUND_ENABLED = true
 local SOUND_ID = "rbxasset://sounds/electronicpingshort.wav"
 local SHAKE_BIND_NAME = "TokyoBurstCameraShake"
+
+-- Limites dos efeitos das unidades (semana 3).
+local PROJECTILE_POOL_SIZE = 40 -- maximo de projeteis ao mesmo tempo (se lotar, ignora o novo)
+local SPARK_POOL_SIZE = 12
+local RING_POOL_SIZE = 8
+local PLACE_POOL_SIZE = 4
+local STYLE_SHURIKEN = 1 -- numeros em vez de textos: comparar numero e mais barato no loop
+local STYLE_SLASH = 2
+local STYLE_ORB = 3
+local HIDDEN_POSITION = Vector3.new(0, -500, 0)
 
 -- Animacoes reaproveitadas.
 local POP_IN = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -63,6 +75,48 @@ type NumberSlot = {
 	tweens: { Tween },
 }
 
+type UnitVisual = {
+	style: number,
+	color: Color3,
+	accent: Color3,
+	splash: number,
+	height: number,
+}
+
+type ProjectileSlot = {
+	part: Part,
+	aux: Part, -- segunda peca: cruz da shuriken, nucleo branco do slash, brilho do orb
+	active: boolean,
+	style: number,
+	t: number,
+	duration: number,
+	from: Vector3,
+	to: Vector3,
+	base: CFrame,
+	arc: number,
+	visual: UnitVisual,
+}
+
+type SparkSlot = {
+	part: Part,
+	emitter: ParticleEmitter,
+	light: PointLight,
+	lightTween: Tween?,
+}
+
+type RingSlot = {
+	part: Part,
+	tweens: { Tween },
+}
+
+type PlaceSlot = {
+	sphere: Part,
+	pillar: Part,
+	ring: RingSlot,
+	light: PointLight,
+	tweens: { Tween },
+}
+
 local FxController = {}
 
 local connections: { RBXScriptConnection } = {}
@@ -74,6 +128,18 @@ local numberSlots: { NumberSlot } = {}
 local nextBurst = 1
 local nextLeak = 1
 local nextNumber = 1
+
+local projectileSlots: { ProjectileSlot } = {}
+local sparkSlots: { SparkSlot } = {}
+local ringSlots: { RingSlot } = {}
+local placeSlots: { PlaceSlot } = {}
+local nextProjectile = 1
+local nextSpark = 1
+local nextRing = 1
+local nextPlace = 1
+local activeProjectiles = 0
+local projectileConnection: RBXScriptConnection? = nil
+local visualCache: { [string]: UnitVisual } = {}
 
 local flashFrame: Frame? = nil
 local flashTween: Tween? = nil
@@ -280,6 +346,409 @@ local function showNumber(position: Vector3, text: string)
 	rise:Play()
 	fadeText:Play()
 	fadeStroke:Play()
+end
+
+-- ---------------------------------------------------------------------------
+-- Visual das unidades (lido do Config, com valores reserva)
+-- ---------------------------------------------------------------------------
+
+local function styleFromName(name: unknown, kind: string): number
+	if name == "Shuriken" then
+		return STYLE_SHURIKEN
+	elseif name == "Slash" then
+		return STYLE_SLASH
+	elseif name == "Orb" then
+		return STYLE_ORB
+	end
+	-- Sem Config: adivinha pelo nome do tipo para o efeito ainda fazer sentido.
+	if kind == "Ninja" then
+		return STYLE_SHURIKEN
+	elseif kind == "Samurai" then
+		return STYLE_SLASH
+	end
+	return STYLE_ORB
+end
+
+-- Guardamos o resultado numa tabela (cache) para nao recalcular a cada ataque.
+local function getVisual(kind: string): UnitVisual
+	local cached = visualCache[kind]
+	if cached then
+		return cached
+	end
+	local entry: any = nil
+	local units: any = Config.UNITS
+	if typeof(units) == "table" then
+		entry = units[kind]
+	end
+	local visual: UnitVisual
+	if typeof(entry) == "table" then
+		visual = {
+			style = styleFromName(entry.attackStyle, kind),
+			color = if typeof(entry.color) == "Color3" then entry.color else PALETTE[5],
+			accent = if typeof(entry.accentColor) == "Color3" then entry.accentColor else PALETTE[2],
+			splash = if typeof(entry.splashRadius) == "number" then entry.splashRadius else 0,
+			height = if typeof(entry.height) == "number" then entry.height else 4,
+		}
+	else
+		visual = {
+			style = styleFromName(nil, kind),
+			color = PALETTE[5],
+			accent = PALETTE[2],
+			splash = 0,
+			height = 4,
+		}
+	end
+	visualCache[kind] = visual
+	return visual
+end
+
+-- ---------------------------------------------------------------------------
+-- Faiscas de impacto (pool: 1 emissor + 1 luz por slot)
+-- ---------------------------------------------------------------------------
+
+local function makeSparkSlot(folder: Folder): SparkSlot
+	local part = Instance.new("Part")
+	part.Name = "SparkSlot"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.Size = Vector3.one * 0.2
+	part.Position = HIDDEN_POSITION
+	part.Parent = folder
+
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = part
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Enabled = false
+	emitter.Rate = 0
+	emitter.Lifetime = NumberRange.new(0.2, 0.45)
+	emitter.Speed = NumberRange.new(14, 34)
+	emitter.SpreadAngle = Vector2.new(360, 360)
+	emitter.Drag = 4
+	emitter.LightEmission = 1
+	emitter.LightInfluence = 0
+	emitter.Size = NumberSequence.new(0.55, 0)
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.6, 0.1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	emitter.Parent = attachment
+
+	local light = Instance.new("PointLight")
+	light.Range = 10
+	light.Brightness = 0
+	light.Shadows = false
+	light.Parent = part
+
+	return { part = part, emitter = emitter, light = light, lightTween = nil }
+end
+
+local function spark(position: Vector3, color: Color3, count: number)
+	local slot = sparkSlots[nextSpark]
+	nextSpark = nextSpark % #sparkSlots + 1
+	slot.part.Position = position
+	-- Particulas nascem com a cor do momento: assim cada unidade solta faiscas da sua cor.
+	slot.emitter.Color = ColorSequence.new(Color3.new(1, 1, 1):Lerp(color, 0.5), color)
+	slot.emitter:Emit(count)
+	local old = slot.lightTween
+	if old then
+		old:Cancel()
+	end
+	slot.light.Color = color
+	slot.light.Brightness = 3
+	local tween = TweenService:Create(slot.light, LIGHT_FADE, { Brightness = 0 })
+	slot.lightTween = tween
+	tween:Play()
+end
+
+-- ---------------------------------------------------------------------------
+-- Aneis de explosao (pool de cilindros finos, deitados no chao)
+-- ---------------------------------------------------------------------------
+
+local RING_INFO = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function makeRingSlot(folder: Folder): RingSlot
+	local part = Instance.new("Part")
+	part.Name = "RingSlot"
+	part.Shape = Enum.PartType.Cylinder
+	part.Material = Enum.Material.Neon
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.Size = Vector3.new(0.3, 1, 1)
+	part.Position = HIDDEN_POSITION
+	part.Parent = folder
+	return { part = part, tweens = {} }
+end
+
+-- O cilindro do Roblox tem o eixo no X; girar 90 graus em Z deixa ele "deitado" (fino na vertical).
+local FLAT = CFrame.Angles(0, 0, math.rad(90))
+
+local function playRing(slot: RingSlot, position: Vector3, color: Color3, diameter: number, info: TweenInfo)
+	cancelAll(slot.tweens)
+	local part = slot.part
+	part.Color = color
+	part.Size = Vector3.new(0.35, 1, 1)
+	part.Transparency = 0.15
+	part.CFrame = CFrame.new(position) * FLAT
+	local grow = TweenService:Create(part, info, { Size = Vector3.new(0.35, diameter, diameter), Transparency = 1 })
+	table.insert(slot.tweens, grow)
+	grow:Play()
+end
+
+local function ring(position: Vector3, color: Color3, diameter: number)
+	local slot = ringSlots[nextRing]
+	nextRing = nextRing % #ringSlots + 1
+	playRing(slot, position, color, diameter, RING_INFO)
+end
+
+-- ---------------------------------------------------------------------------
+-- Projeteis das unidades (pool de 2 pecas por slot + UM loop so enquanto houver ataque)
+-- ---------------------------------------------------------------------------
+
+local function makeEffectPart(folder: Folder, name: string): Part
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Material = Enum.Material.Neon
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Transparency = 1
+	part.Size = Vector3.one * 0.5
+	part.Position = HIDDEN_POSITION
+	part.Parent = folder
+	return part
+end
+
+local function makeProjectileSlot(folder: Folder): ProjectileSlot
+	return {
+		part = makeEffectPart(folder, "ProjectileSlot"),
+		aux = makeEffectPart(folder, "ProjectileAux"),
+		active = false,
+		style = STYLE_SHURIKEN,
+		t = 0,
+		duration = 0.2,
+		from = Vector3.zero,
+		to = Vector3.zero,
+		base = CFrame.new(),
+		arc = 0,
+		visual = getVisual("Ninja"),
+	}
+end
+
+local function finishProjectile(slot: ProjectileSlot)
+	slot.active = false
+	slot.part.Transparency = 1
+	slot.aux.Transparency = 1
+	activeProjectiles -= 1
+	local accent = slot.visual.accent
+	if slot.style == STYLE_ORB then
+		-- Orb: anel no tamanho da area de dano + um pouco de confete.
+		local diameter = if slot.visual.splash > 0 then slot.visual.splash * 2 else 5
+		ring(slot.to, accent, diameter)
+		spark(slot.to, accent, 14)
+		burst(burstSlots, nextBurst, slot.to, 2, accent)
+		nextBurst = nextBurst % #burstSlots + 1
+	elseif slot.style == STYLE_SLASH then
+		spark(slot.to, Color3.new(1, 1, 1), 12)
+	else
+		spark(slot.to, accent, 8)
+	end
+end
+
+local function onProjectileStep(dt: number)
+	for _, slot in projectileSlots do
+		if not slot.active then
+			continue
+		end
+		slot.t += dt
+		local a = slot.t / slot.duration
+		if a >= 1 then
+			finishProjectile(slot)
+			continue
+		end
+		local style = slot.style
+		if style == STYLE_SHURIKEN then
+			local cf = CFrame.new(slot.from:Lerp(slot.to, a)) * CFrame.Angles(0, slot.t * 45, 0)
+			slot.part.CFrame = cf
+			slot.aux.CFrame = cf * CFrame.Angles(0, math.rad(90), 0)
+		elseif style == STYLE_SLASH then
+			-- Gira em volta do eixo de frente: parece um talho cruzando o inimigo.
+			local eased = 1 - (1 - a) * (1 - a)
+			local angle = -1.2 + 2.4 * eased
+			local cf = slot.base * CFrame.Angles(0, 0, angle)
+			slot.part.CFrame = cf
+			slot.aux.CFrame = cf
+			local fade = 0.1 + 0.9 * a * a
+			slot.part.Transparency = fade
+			slot.aux.Transparency = fade
+		else
+			local pos = slot.from:Lerp(slot.to, a) + Vector3.new(0, slot.arc * 4 * a * (1 - a), 0)
+			local cf = CFrame.new(pos)
+			slot.part.CFrame = cf
+			slot.aux.CFrame = cf
+		end
+	end
+	if activeProjectiles <= 0 then
+		-- Nada voando: desliga o loop (nao gasta nada parado).
+		local connection = projectileConnection
+		if connection then
+			connection:Disconnect()
+			projectileConnection = nil
+		end
+	end
+end
+
+local function launchProjectile(visual: UnitVisual, from: Vector3, to: Vector3): boolean
+	local count = #projectileSlots
+	local slot: ProjectileSlot? = nil
+	for i = 0, count - 1 do
+		local index = (nextProjectile + i - 1) % count + 1
+		local candidate = projectileSlots[index]
+		if not candidate.active then
+			slot = candidate
+			nextProjectile = index % count + 1
+			break
+		end
+	end
+	if not slot then
+		return false -- limite atingido: melhor perder um efeito do que travar o celular
+	end
+
+	local delta = to - from
+	local distance = delta.Magnitude
+	local part = slot.part
+	local aux = slot.aux
+	local accent = visual.accent
+
+	slot.visual = visual
+	slot.style = visual.style
+	slot.t = 0
+	slot.from = from
+	slot.to = to
+	part.Color = accent
+
+	if visual.style == STYLE_SHURIKEN then
+		slot.duration = math.clamp(distance / 90, 0.12, 0.2)
+		part.Shape = Enum.PartType.Block
+		aux.Shape = Enum.PartType.Block
+		part.Size = Vector3.new(1.3, 0.1, 0.3)
+		aux.Size = Vector3.new(1.3, 0.1, 0.3)
+		aux.Color = Color3.new(1, 1, 1)
+		part.Transparency = 0
+		aux.Transparency = 0
+		part.CFrame = CFrame.new(from)
+		aux.CFrame = CFrame.new(from)
+	elseif visual.style == STYLE_SLASH then
+		slot.duration = 0.2
+		local flat = Vector3.new(delta.X, 0, delta.Z)
+		if flat.Magnitude < 0.01 then
+			flat = Vector3.zAxis
+		end
+		slot.base = CFrame.lookAt(to, to + flat.Unit)
+		part.Shape = Enum.PartType.Block
+		aux.Shape = Enum.PartType.Block
+		part.Size = Vector3.new(5, 0.16, 0.6)
+		aux.Size = Vector3.new(5.4, 0.07, 0.22)
+		aux.Color = Color3.new(1, 1, 1)
+		part.Transparency = 0.1
+		aux.Transparency = 0.1
+		part.CFrame = slot.base
+		aux.CFrame = slot.base
+		spark(to, Color3.new(1, 1, 1), 4) -- clarao branco logo no inicio do talho
+	else
+		slot.duration = math.clamp(distance / 45, 0.25, 0.45)
+		slot.arc = 3 + distance * 0.15
+		part.Shape = Enum.PartType.Ball
+		aux.Shape = Enum.PartType.Ball
+		part.Size = Vector3.one * 1.4
+		aux.Size = Vector3.one * 2.6
+		aux.Color = accent
+		part.Transparency = 0
+		aux.Transparency = 0.65
+		part.CFrame = CFrame.new(from)
+		aux.CFrame = CFrame.new(from)
+	end
+
+	slot.active = true
+	activeProjectiles += 1
+	if not projectileConnection then
+		projectileConnection = RunService.Heartbeat:Connect(onProjectileStep)
+	end
+	return true
+end
+
+-- ---------------------------------------------------------------------------
+-- Explosao de luz ao colocar uma unidade (pool de esfera + pilar + anel + luz)
+-- ---------------------------------------------------------------------------
+
+local SPHERE_INFO = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local PILLAR_INFO = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local PLACE_RING_INFO = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function makePlaceSlot(folder: Folder): PlaceSlot
+	local sphere = makeEffectPart(folder, "PlaceSphere")
+	sphere.Shape = Enum.PartType.Ball
+
+	local pillar = makeEffectPart(folder, "PlacePillar")
+	pillar.Shape = Enum.PartType.Cylinder
+
+	local light = Instance.new("PointLight")
+	light.Range = 26
+	light.Brightness = 0
+	light.Shadows = false
+	light.Parent = sphere
+
+	return { sphere = sphere, pillar = pillar, ring = makeRingSlot(folder), light = light, tweens = {} }
+end
+
+local function placeExplosion(position: Vector3, visual: UnitVisual)
+	local slot = placeSlots[nextPlace]
+	nextPlace = nextPlace % #placeSlots + 1
+	cancelAll(slot.tweens)
+
+	local accent = visual.accent
+
+	-- Esfera de luz que cresce e some.
+	slot.sphere.Color = accent
+	slot.sphere.Size = Vector3.one * 1.5
+	slot.sphere.Transparency = 0.2
+	slot.sphere.Position = position
+	local grow = TweenService:Create(slot.sphere, SPHERE_INFO, { Size = Vector3.one * 11, Transparency = 1 })
+
+	-- Pilar de luz vertical (cilindro em pe: Size.X e a altura).
+	local pillarHeight = 18
+	slot.pillar.Color = Color3.new(1, 1, 1):Lerp(accent, 0.4)
+	slot.pillar.Size = Vector3.new(pillarHeight, 4, 4)
+	slot.pillar.Transparency = 0.2
+	slot.pillar.CFrame = CFrame.new(position + Vector3.new(0, pillarHeight * 0.5 - 1.5, 0)) * FLAT
+	local rise = TweenService:Create(slot.pillar, PILLAR_INFO, { Size = Vector3.new(pillarHeight * 1.4, 0.4, 0.4), Transparency = 1 })
+
+	-- Flash de luz.
+	slot.light.Color = accent
+	slot.light.Brightness = 8
+	local flash = TweenService:Create(slot.light, LIGHT_FADE, { Brightness = 0 })
+
+	table.insert(slot.tweens, grow)
+	table.insert(slot.tweens, rise)
+	table.insert(slot.tweens, flash)
+	grow:Play()
+	rise:Play()
+	flash:Play()
+
+	-- Anel no chao (usa o proprio anel do slot, reservado para esta explosao).
+	cancelAll(slot.ring.tweens)
+	playRing(slot.ring, position - Vector3.new(0, visual.height * 0.35, 0), accent, 14, PLACE_RING_INFO)
 end
 
 -- ---------------------------------------------------------------------------
@@ -495,6 +964,30 @@ local function onMatchEnded(result: string)
 	end
 end
 
+local function onUnitPlaced(_id: string, kind: string, position: Vector3, ownerUserId: number)
+	if typeof(position) ~= "Vector3" or typeof(kind) ~= "string" then
+		return
+	end
+	local visual = getVisual(kind)
+	placeExplosion(position, visual)
+	-- Confete da paleta toda (reaproveita o pool de confete que ja existe).
+	burst(burstSlots, nextBurst, position + Vector3.new(0, 2, 0), CONFETTI_PER_COLOR, visual.accent)
+	nextBurst = nextBurst % #burstSlots + 1
+	showNumber(position + Vector3.new(0, visual.height, 0), "NEW!")
+	playPing(0.3, 1.0, 1.3)
+	-- Tremor so para quem colocou a unidade, bem leve.
+	if ownerUserId == Players.LocalPlayer.UserId then
+		startShake(0.25, 0.25)
+	end
+end
+
+local function onUnitAttacked(_id: string, kind: string, from: Vector3, to: Vector3)
+	if typeof(kind) ~= "string" or typeof(from) ~= "Vector3" or typeof(to) ~= "Vector3" then
+		return
+	end
+	launchProjectile(getVisual(kind), from, to)
+end
+
 local function makeLabelBase(parent: Instance): (TextLabel, UIStroke, UIScale)
 	local label = Instance.new("TextLabel")
 	label.Name = "Banner"
@@ -546,6 +1039,19 @@ function FxController.start()
 		table.insert(numberSlots, makeNumberSlot(folder))
 	end
 
+	for _ = 1, PROJECTILE_POOL_SIZE do
+		table.insert(projectileSlots, makeProjectileSlot(folder))
+	end
+	for _ = 1, SPARK_POOL_SIZE do
+		table.insert(sparkSlots, makeSparkSlot(folder))
+	end
+	for _ = 1, RING_POOL_SIZE do
+		table.insert(ringSlots, makeRingSlot(folder))
+	end
+	for _ = 1, PLACE_POOL_SIZE do
+		table.insert(placeSlots, makePlaceSlot(folder))
+	end
+
 	-- Interface dos efeitos: tela cheia (IgnoreGuiInset) para o flash cobrir tudo.
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "Fx"
@@ -595,6 +1101,8 @@ function FxController.start()
 	table.insert(connections, Net.event("BaseHit").OnClientEvent:Connect(onBaseHit))
 	table.insert(connections, Net.event("WaveStarted").OnClientEvent:Connect(onWaveStarted))
 	table.insert(connections, Net.event("MatchEnded").OnClientEvent:Connect(onMatchEnded))
+	table.insert(connections, Net.event("UnitPlaced").OnClientEvent:Connect(onUnitPlaced))
+	table.insert(connections, Net.event("UnitAttacked").OnClientEvent:Connect(onUnitAttacked))
 
 	-- Sai do modo cinza assim que a partida deixa o estado Defeat (ex.: reiniciou).
 	local matchState = ReplicatedStorage:WaitForChild("MatchState", 30)
@@ -613,6 +1121,11 @@ end
 -- Limpeza explicita (nao usada no jogo normal): desliga tudo e solta a camera.
 function FxController.destroy()
 	stopShake()
+	local projectileLoop = projectileConnection
+	if projectileLoop then
+		projectileLoop:Disconnect()
+		projectileConnection = nil
+	end
 	for _, connection in connections do
 		connection:Disconnect()
 	end
