@@ -4726,12 +4726,13 @@ function PlacementController.start()
 		portrait.AnchorPoint = Vector2.new(0, 0.5)
 		portrait.Position = UDim2.fromScale(0.06, 0.5)
 		portrait.Size = UDim2.fromScale(0.3, 0.7)
-		portrait.BackgroundColor3 = def.color
+		-- Clareia um pouco a cor: o Ninja (azul bem escuro) sumia no fundo escuro do card.
+		portrait.BackgroundColor3 = def.color:Lerp(Color3.new(1, 1, 1), 0.25)
 		portrait.BorderSizePixel = 0
 		portrait.Parent = button
 		local portraitAspect = Instance.new("UIAspectRatioConstraint") -- sempre quadrado
 		portraitAspect.AspectRatio = 1
-		portraitAspect.AspectType = Enum.AspectType.FitWithinMaxAxis
+		portraitAspect.AspectType = Enum.AspectType.FitWithinMaxSize
 		portraitAspect.Parent = portrait
 		local portraitCorner = Instance.new("UICorner")
 		portraitCorner.CornerRadius = UDim.new(0.2, 0)
