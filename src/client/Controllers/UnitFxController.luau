@@ -238,9 +238,12 @@ local function makeLevelEffects(folder: Folder, footPosition: Vector3, height: n
 
 	local stars = Instance.new("BillboardGui")
 	stars.Name = "LevelStars"
-	stars.Adornee = ring
+	-- Preso no attachment (que esta "em pe"), NAO no anel: o anel e um cilindro girado 90 graus,
+	-- e o StudsOffsetWorldSpace segue a rotacao do Adornee. No anel, "para cima" virava "para o lado".
+	-- O attachment ja fica height * 0.3 acima do pe, entao so falta o resto da altura.
+	stars.Adornee = attachment
 	stars.Size = UDim2.fromOffset(80, 22)
-	stars.StudsOffsetWorldSpace = Vector3.new(0, height + 1.2, 0)
+	stars.StudsOffsetWorldSpace = Vector3.new(0, height * 0.7, 0) -- ajustado olhando no Play
 	stars.MaxDistance = STARS_MAX_DISTANCE
 	stars.AlwaysOnTop = false
 	stars.Active = false
