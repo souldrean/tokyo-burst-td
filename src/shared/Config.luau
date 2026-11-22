@@ -2,8 +2,8 @@
 -- Config: todos os numeros "ajustaveis" do jogo ficam aqui.
 -- Assim, para mudar a velocidade de um inimigo, voce mexe em UM lugar so.
 -- table.freeze deixa a tabela somente leitura: ninguem muda um valor por engano.
--- ATENCAO: ENEMIES, WAVES, WAVE_TIMEOUT_SECONDS, INTERMISSION_SECONDS, UNITS, START_CASH
--- e MAX_UNITS_PER_PLAYER tem uma copia em tools/sim_match.py. Se mudar aqui, mude la tambem (mantenha em sincronia).
+-- ATENCAO: ENEMIES, WAVES, WAVE_TIMEOUT_SECONDS, INTERMISSION_SECONDS, UNITS (inclusive upgrades),
+-- START_CASH, MAX_UNITS_PER_PLAYER, WAVE_BREAK_SECONDS, SELL_REFUND e BOSS_SLOW_FACTOR tem uma copia em tools/sim_match.py. Se mudar aqui, mude la tambem (mantenha em sincronia).
 
 local Types = require(script.Parent.Types)
 
@@ -96,6 +96,22 @@ local UNITS: { [string]: Types.UnitDef } = {
 		accentColor = Color3.fromRGB(60, 220, 255),
 		height = 5,
 		attackStyle = "Shuriken",
+		upgrades = {
+			{ cost = 60, damage = 10, range = 29, cooldown = 0.5, splashRadius = 0 },
+			{ cost = 90, damage = 12, range = 30, cooldown = 0.5, splashRadius = 0 },
+			{
+				cost = 150,
+				damage = 15,
+				range = 31,
+				cooldown = 0.45,
+				splashRadius = 0,
+				evolution = {
+					displayName = "Shadow Ninja",
+					accentColor = Color3.fromRGB(170, 80, 255),
+					ability = { kind = "MultiShot", description = "Throws 3 shurikens at once", targets = 3 },
+				},
+			},
+		},
 	},
 	Samurai = {
 		displayName = "Samurai",
@@ -108,6 +124,22 @@ local UNITS: { [string]: Types.UnitDef } = {
 		accentColor = Color3.fromRGB(255, 200, 60),
 		height = 5.6,
 		attackStyle = "Slash",
+		upgrades = {
+			{ cost = 120, damage = 42, range = 19, cooldown = 1.4, splashRadius = 0 },
+			{ cost = 170, damage = 58, range = 20, cooldown = 1.3, splashRadius = 0 },
+			{
+				cost = 300,
+				damage = 70,
+				range = 21,
+				cooldown = 1.2,
+				splashRadius = 0,
+				evolution = {
+					displayName = "Storm Samurai",
+					accentColor = Color3.fromRGB(120, 200, 255),
+					ability = { kind = "Crit", description = "Every 3rd slash hits 3x harder", every = 3, multiplier = 3 },
+				},
+			},
+		},
 	},
 	Mage = {
 		displayName = "Mage",
@@ -120,6 +152,22 @@ local UNITS: { [string]: Types.UnitDef } = {
 		accentColor = Color3.fromRGB(230, 90, 255),
 		height = 5.4,
 		attackStyle = "Orb",
+		upgrades = {
+			{ cost = 180, damage = 18, range = 24, cooldown = 1.4, splashRadius = 10 },
+			{ cost = 240, damage = 24, range = 26, cooldown = 1.35, splashRadius = 11 },
+			{
+				cost = 400,
+				damage = 30,
+				range = 27,
+				cooldown = 1.3,
+				splashRadius = 12,
+				evolution = {
+					displayName = "Frost Archmage",
+					accentColor = Color3.fromRGB(170, 240, 255),
+					ability = { kind = "Slow", description = "Hits slow enemies by 40% for 2s", factor = 0.6, duration = 2 },
+				},
+			},
+		},
 	},
 }
 
@@ -147,7 +195,17 @@ local Config = {
 	PLACE_ALLOWED_STATES = { Intermission = true, Wave = true } :: { [string]: boolean },
 	UNIT_ORDER = { "Ninja", "Samurai", "Mage" } :: { string }, -- ordem da hotbar
 
+	-- Upgrades e venda (semana 4)
+	MAX_UNIT_LEVEL = 4,
+	-- estado da partida -> parte do dinheiro devolvida; estado ausente = nao pode vender.
+	SELL_REFUND = { Intermission = 1, Wave = 0.6 } :: { [string]: number },
+	UPGRADE_ALLOWED_STATES = { Intermission = true, Wave = true } :: { [string]: boolean },
+	BOSS_KINDS = { Oni = true } :: { [string]: boolean }, -- chefes sao menos afetados pelo Slow
+	BOSS_SLOW_FACTOR = 0.8,
+	WAVE_BREAK_SECONDS = 5, -- pausa depois de limpar uma onda (sim_match.py tem copia)
+
 	-- Debug (so no Studio)
+	DEBUG_GIVE_CASH = 500,
 	DEBUG_HIT_DAMAGE = 5,
 
 	ENEMIES = ENEMIES,

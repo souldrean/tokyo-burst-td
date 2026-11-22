@@ -132,7 +132,7 @@ function HudController.start()
 		"BuildTag",
 		UDim2.fromScale(0.01, 0.05),
 		UDim2.fromScale(0.12, 0.03),
-		"Week 3 build",
+		"Week 4 build",
 		Color3.fromRGB(200, 215, 255),
 		12,
 		16

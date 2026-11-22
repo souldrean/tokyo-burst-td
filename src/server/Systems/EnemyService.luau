@@ -32,6 +32,7 @@ type Enemy = {
 	baseDamage: number,
 	reward: number,
 	heightOffset: number,
+	slowUntil: number, -- hora (servidor) em que o slow acaba; 0 = nao esta lento
 }
 
 -- reward: o que o inimigo vale (0 se vazou). Quem so quer id/reason pode ignorar o resto.
@@ -214,6 +215,7 @@ function EnemyService.spawn(kind: string): string?
 		baseDamage = def.baseDamage,
 		reward = def.reward,
 		heightOffset = heightOffset,
+		slowUntil = 0,
 	}
 	aliveCount += 1
 	return id
@@ -257,6 +259,31 @@ function EnemyService.setSpeed(id: string, speed: number)
 	enemy.model:SetAttribute("Speed", speed)
 end
 
+-- Deixa o inimigo mais lento por um tempo. NUNCA empilha: um novo slow so renova o relogio.
+-- Nao usamos task.delay (um por tiro seria muito): guardamos slowUntil e o loop do
+-- servidor (checkLeaks) devolve a velocidade normal quando o tempo acaba.
+function EnemyService.slow(id: string, factor: number, duration: number)
+	local enemy = enemies[id]
+	if not enemy then
+		return
+	end
+	if factor ~= factor or factor <= 0 or factor > 1 or duration ~= duration or duration <= 0 then
+		return
+	end
+	local def = Config.ENEMIES[enemy.kind]
+	if not def then
+		return
+	end
+	local now = workspace:GetServerTimeNow()
+	local slowedSpeed = def.speed * factor
+	-- Velocidade base vem do def (nao de enemy.speed, que pode ja estar lento).
+	-- Se ja esta mais lento ou igual, so renova o tempo; senao aplica (rebase continuo).
+	if enemy.slowUntil <= 0 or slowedSpeed < enemy.speed then
+		EnemyService.setSpeed(id, slowedSpeed)
+	end
+	enemy.slowUntil = math.max(enemy.slowUntil, now + duration)
+end
+
 function EnemyService.getDistance(id: string): number?
 	local enemy = enemies[id]
 	if not enemy then
@@ -276,10 +303,11 @@ function EnemyService.snapshot(): ({ Types.SnapshotEntry }, number)
 		local distance = currentDistance(enemy, now)
 		local entry = snapshotBuffer[count]
 		if not entry then
-			entry = { id = id, distance = distance, position = Vector3.zero }
+			entry = { id = id, distance = distance, position = Vector3.zero, kind = enemy.kind }
 			snapshotBuffer[count] = entry
 		end
 		entry.id = id
+		entry.kind = enemy.kind
 		entry.distance = distance
 		entry.position = centerPosition(enemy, distance)
 	end
@@ -321,6 +349,13 @@ local function checkLeaks()
 	for id, enemy in enemies do
 		if currentDistance(enemy, now) >= total then
 			table.insert(leakedBuffer, id)
+		elseif enemy.slowUntil > 0 and now >= enemy.slowUntil then
+			-- O slow acabou: volta para a velocidade normal do tipo (so mexe em campos, nao em chaves).
+			enemy.slowUntil = 0
+			local def = Config.ENEMIES[enemy.kind]
+			if def then
+				EnemyService.setSpeed(id, def.speed)
+			end
 		end
 	end
 

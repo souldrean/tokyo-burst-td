@@ -14,10 +14,15 @@ Cenarios:
 
 ATENCAO (semana 3): UNITS, START_CASH, MAX_UNITS_PER_PLAYER e os campos health/reward
 de ENEMIES tambem sao copia de src/shared/Config.luau.
+
+Semana 4: UPGRADES (niveis 2-4 de cada unidade), WAVE_BREAK_SECONDS, BOSS_SLOW_FACTOR e as
+habilidades da evolucao tambem sao copia de Config.luau. O cenario (c) agora tambem compra
+upgrades (melhor "poder extra por dinheiro") e pode ECONOMIZAR para uma evolucao.
 """
 
 PATH_LENGTH = 640.0  # studs (caminho do mapa, aprox.)
 INTERMISSION_SECONDS = 6
+WAVE_BREAK_SECONDS = 5  # pausa depois de limpar uma onda que nao e a ultima (copia do Config)
 BASE_MAX_HEALTH = 100
 WAVE_TIMEOUT_SECONDS = 15
 KILL_FRACTION = 0.4
@@ -41,9 +46,26 @@ UNITS = {
 }
 UNIT_ORDER = ["Ninja", "Samurai", "Mage"]
 
+# kind -> [nivel 2, nivel 3, nivel 4(evolucao)], cada um = (cost, damage, range, cooldown, splashRadius)
+# (copia de Config.UNITS[kind].upgrades)
+UPGRADES = {
+    "Ninja": [(60, 10, 29, 0.5, 0), (90, 12, 30, 0.5, 0), (150, 15, 31, 0.45, 0)],
+    "Samurai": [(120, 42, 19, 1.4, 0), (170, 58, 20, 1.3, 0), (300, 70, 21, 1.2, 0)],
+    "Mage": [(180, 18, 24, 1.4, 10), (240, 24, 26, 1.35, 11), (400, 30, 27, 1.3, 12)],
+}
+# Habilidade do nivel 4 -> multiplicador de DPS efetivo (aproximacao, nao existe no Config):
+#   MultiShot ~ x2 em ondas cheias; Crit = 1 + (mult-1)/every; Slow = x1.25 para o TIME todo.
+CRIT_EVERY = 3
+CRIT_MULT = 3
+EVO_MULT = {"Ninja": 2.0, "Samurai": 1 + (CRIT_MULT - 1) / CRIT_EVERY, "Mage": 1.0}
+SLOW_TEAM_MULT = 1.25
+BOSS_SLOW_FACTOR = 0.8
+MAX_LEVEL = 4
+
 # Aproximacoes do cenario (c) (nao existem no Config):
 SPLASH_MULT = 1.6  # um tiro de area acerta em media 1.6 inimigos
-BUILD_ORDER = ["Ninja", "Ninja", "Samurai", "Mage", "Samurai", "Mage"]  # ordem de compra do jogador
+MAX_SAME_KIND = 2  # jogador competente diversifica: no maximo 2 unidades iguais
+PATIENCE = 2  # quantas ondas o jogador aceita economizar para um item melhor
 OVERKILL_EFF = 0.65  # parte do dano que nao e desperdicada em inimigos ja quase mortos
 
 # Cada onda = lista de grupos (kind, count, interval). Grupos saem em sequencia.
@@ -86,6 +108,8 @@ def scenario_a():
             length = max(spawn_dur, clear)  # ultima onda: espera limpar tudo
         else:
             length = max(spawn_dur, min(clear, WAVE_TIMEOUT_SECONDS))
+            if clear <= WAVE_TIMEOUT_SECONDS:  # onda limpa a tempo -> tem pausa
+                length += WAVE_BREAK_SECONDS
         slowest = max(walk_time(k) for k, _ in offs)
         rows.append((i + 1, spawn_dur, slowest, length))
         now += length
@@ -112,29 +136,85 @@ def scenario_b():
     return None, None
 
 
-def unit_value(kind):
-    """Valor = dano por segundo * alcance (mais alcance = mais tempo atirando) / custo."""
+def stats(unit):
+    """(cost_de_compra, range, damage, cooldown, splash) do nivel atual da unidade."""
+    kind, level = unit
     cost, rng, dmg, cd, splash = UNITS[kind]
+    if level == 1:
+        return (cost, rng, dmg, cd, splash)
+    ucost, udmg, urng, ucd, usplash = UPGRADES[kind][level - 2]
+    return (ucost, urng, udmg, ucd, usplash)
+
+
+def unit_dps(unit):
+    """Dano por segundo efetivo (splash e habilidade da evolucao contam)."""
+    kind, level = unit
+    _, _, dmg, cd, splash = stats(unit)
     mult = SPLASH_MULT if splash > 0 else 1.0
-    return dmg / cd * mult * rng / cost
+    if level == MAX_LEVEL:
+        mult *= EVO_MULT[kind]
+    return dmg / cd * mult
 
 
-def unit_power(kind):
-    """Poder bruto = dano por segundo * alcance (dps com splash conta mais)."""
-    _, rng, dmg, cd, splash = UNITS[kind]
-    return dmg / cd * (SPLASH_MULT if splash > 0 else 1.0) * rng
+def team_mult(owned):
+    """Slow do Mago evoluido ajuda o time inteiro (inimigos ficam mais tempo no alcance)."""
+    return SLOW_TEAM_MULT if ("Mage", MAX_LEVEL) in owned else 1.0
 
 
-def buy_greedy(cash, owned):
-    """Jogador competente: segue uma ordem de compra fixa e compra o proximo item
-    assim que o dinheiro der (nao ha venda na semana 3, entao nao desperdica slot)."""
-    while len(owned) < MAX_UNITS_PER_PLAYER:
-        nxt = BUILD_ORDER[len(owned)]
-        if UNITS[nxt][0] > cash:
+def total_power(owned):
+    """Poder bruto do time = soma de dps*alcance, vezes o bonus de equipe."""
+    return sum(unit_dps(u) * stats(u)[1] for u in owned) * team_mult(owned)
+
+
+def options(owned):
+    """Lista de (valor_por_dinheiro, custo, nova_lista) de tudo que da para fazer."""
+    out = []
+    base = total_power(owned)
+    if len(owned) < MAX_UNITS_PER_PLAYER:
+        for kind in UNIT_ORDER:
+            if sum(1 for k, _ in owned if k == kind) >= MAX_SAME_KIND:
+                continue
+            new = owned + [(kind, 1)]
+            out.append(((total_power(new) - base) / UNITS[kind][0], UNITS[kind][0], new))
+    for i, (kind, level) in enumerate(owned):
+        if level < MAX_LEVEL:
+            cost = UPGRADES[kind][level - 1][0]
+            new = owned[:i] + [(kind, level + 1)] + owned[i + 1:]
+            out.append(((total_power(new) - base) / cost, cost, new))
+    return out
+
+
+def has_evo(owned):
+    return any(lv == MAX_LEVEL for _, lv in owned)
+
+
+def buy_greedy(cash, owned, waited):
+    """Jogador competente: compra o item com melhor "poder extra por dinheiro". Se o melhor
+    ainda nao cabe no bolso, ECONOMIZA por ate PATIENCE ondas (como uma pessoa faria)
+    antes de aceitar o melhor item que ja cabe.
+    Devolve (cash, owned, waited, comprou_evolucao_agora)."""
+    evolved = False
+    while True:
+        opts = sorted(options(owned), key=lambda o: -o[0])
+        if not opts:
             break
-        cash -= UNITS[nxt][0]
-        owned.append(nxt)
-    return cash
+        best = opts[0]
+        if best[1] <= cash:
+            pick = best
+        else:
+            if waited < PATIENCE:
+                waited += 1
+                break
+            affordable = [o for o in opts if o[1] <= cash]
+            if not affordable:
+                break
+            pick = affordable[0]
+        cash -= pick[1]
+        if has_evo(pick[2]) and not has_evo(owned):
+            evolved = True
+        owned = pick[2]
+        waited = 0
+    return cash, owned, waited, evolved
 
 
 def wave_capacity(wave, owned):
@@ -142,22 +222,25 @@ def wave_capacity(wave, owned):
     offs, spawn_dur = spawn_offsets(wave)
     total = 0.0
     for u in owned:
-        _, rng, dmg, cd, splash = UNITS[u]
-        dps = dmg / cd * (SPLASH_MULT if splash > 0 else 1.0)
+        rng = stats(u)[1]
+        dps = unit_dps(u)
         # Tempo em que ha inimigo no alcance: cada passagem dura range*2/velocidade
         # (~50% do alcance dentro do caminho), mas a unidade so atira em um por vez.
         windows = sum(rng * 2 / ENEMIES[k][0] for k, _ in offs)
         max_win = max(rng * 2 / ENEMIES[k][0] for k, _ in offs)
         active = min(windows, spawn_dur + max_win)
         total += dps * active * OVERKILL_EFF
-    return total
+    return total * team_mult(owned)
 
 
 def scenario_c():
     cash = START_CASH
     owned = []
-    cash = buy_greedy(cash, owned)
-    first_buy = UNITS[owned[0]][0] if owned else None
+    waited = 0
+    cash, owned, waited, _ = buy_greedy(cash, owned, waited)
+    first_evo_wave = None
+    first_evo_affordable = None
+    cheapest_evo = min(UPGRADES[k][2][0] for k in UPGRADES)
     base = float(BASE_MAX_HEALTH)
     rows = []
     for i, wave in enumerate(WAVES):
@@ -169,14 +252,18 @@ def scenario_c():
         frac = min(1.0, cap / hp_total)
         base -= (1 - frac) * dmg_total
         cash += frac * reward_total
-        # DPS "necessario" = vida total / duracao da onda (spawn + passagem).
-        need = hp_total / (spawn_dur + max(UNITS[owned[0]][1] * 2 / ENEMIES[k][0] for k, _ in offs) if owned else spawn_dur)
         have = cap / (spawn_dur + 1e-9)
+        need = hp_total / (spawn_dur + max(stats(owned[0])[1] * 2 / ENEMIES[k][0] for k, _ in offs)) if owned else 0.0
         rows.append((i + 1, round(cash), len(owned), have, need, frac, max(base, 0.0)))
         if base <= 0:
             break
-        cash = buy_greedy(cash, owned)
-    return rows, base, owned
+        # "Evolucao ao alcance": ja deu dinheiro para a evolucao mais barata?
+        if first_evo_affordable is None and cash >= cheapest_evo:
+            first_evo_affordable = i + 1
+        cash, owned, waited, evolved = buy_greedy(cash, owned, waited)
+        if evolved and first_evo_wave is None:
+            first_evo_wave = i + 1
+    return rows, base, owned, first_evo_wave, first_evo_affordable
 
 
 def main():
@@ -193,17 +280,28 @@ def main():
     else:
         print("Cenario (b): sem defesa, a base morre aos %.1f s, na onda %d" % (t, wave))
 
-    rows, base, owned = scenario_c()
+    rows, base, owned, evo_wave, evo_afford = scenario_c()
     print()
-    print("Cenario (c): 1 jogador, START_CASH=%d, segue a ordem de compra (limite %d unidades)"
+    print("Cenario (c): 1 jogador, START_CASH=%d, compra/upgrade por valor (limite %d unidades)"
           % (START_CASH, MAX_UNITS_PER_PLAYER))
     print("Onda | cash antes de comprar | unidades | DPS efetivo | DPS necessario | mortos | base hp")
     for n, c, u, have, need, frac, hp in rows:
         print("%4d | %21d | %8d | %11.1f | %14.1f | %5.0f%% | %7.1f" % (n, c, u, have, need, frac * 100, hp))
     if base > 0:
-        print("Cenario (c): base SOBREVIVE com %.0f%% de vida. Unidades: %s" % (base, ", ".join(owned)))
+        print("Cenario (c): base SOBREVIVE com %.0f%% de vida. Unidades: %s"
+              % (base, ", ".join("%s Lv%d" % u for u in owned)))
+        print("Cenario (c): primeira evolucao COMPRADA na onda %s; dinheiro para a mais barata na onda %s"
+              % (evo_wave, evo_afford))
     else:
         print("Cenario (c): base CAI na onda %d. (ajuste os numeros!)" % rows[-1][0])
+    print()
+    print("Tabela final (nivel: custo / dano / alcance / cooldown / splash):")
+    for kind in UNIT_ORDER:
+        c, r, d, cd, sp = UNITS[kind]
+        print("  %-8s Lv1 %3d / %3d / %2d / %.2f / %2d" % (kind, c, d, r, cd, sp))
+        for n, (uc, ud, ur, ucd, usp) in enumerate(UPGRADES[kind], start=2):
+            print("  %-8s Lv%d %3d / %3d / %2d / %.2f / %2d" % ("", n, uc, ud, ur, ucd, usp))
 
 
-main()
+if __name__ == "__main__":
+    main()

@@ -22,6 +22,11 @@ export type RemoteName =
 	| "UnitPlaced"
 	| "UnitAttacked"
 	| "Notify"
+	| "UpgradeUnit"
+	| "SellUnit"
+	| "UnitUpgraded"
+	| "UnitSold"
+	| "DebugGiveCash"
 
 -- Por que um inimigo saiu do jogo: morto por nos ou chegou no fim (vazou).
 export type DeathReason = "Killed" | "Leaked"
@@ -40,7 +45,14 @@ export type MatchStateName = "Waiting" | "Intermission" | "Wave" | "Victory" | "
 --   (semana 3)
 --   PlaceUnit(kind: string, slotName: string)        <- cliente -> servidor
 --   UnitPlaced(id: string, kind: string, position: Vector3, ownerUserId: number)   <- todos
---   UnitAttacked(id: string, kind: string, from: Vector3, to: Vector3)             <- todos
+--   UnitAttacked(id: string, kind: string, from: Vector3, to: Vector3, special: string?) <- todos
+--       special = "Crit" (golpe critico), "Slow" (Mago congelou), nil = normal
+--   (semana 4)
+--   UpgradeUnit(id: string)                           <- cliente -> servidor
+--   SellUnit(id: string)                              <- cliente -> servidor
+--   DebugGiveCash()                                   <- cliente -> servidor (so no Studio)
+--   UnitUpgraded(id: string, level: number, position: Vector3)                     <- todos
+--   UnitSold(id: string, position: Vector3, refund: number, ownerUserId: number)   <- todos
 --   Notify(text: string)                              <- servidor -> UM cliente
 export type EnemyDiedPayload = {
 	id: string,
@@ -64,6 +76,32 @@ export type EnemyDef = {
 -- Como a unidade ataca (so muda o visual do ataque no cliente).
 export type AttackStyle = "Shuriken" | "Slash" | "Orb"
 
+-- Habilidades do nivel 4 (evolucao).
+export type AbilityKind = "MultiShot" | "Crit" | "Slow"
+export type UnitAbility = {
+	kind: AbilityKind,
+	description: string, -- texto curto em ingles para o painel
+	targets: number?, -- MultiShot: quantos inimigos diferentes por ataque
+	every: number?, -- Crit: a cada N ataques
+	multiplier: number?, -- Crit: multiplicador de dano
+	factor: number?, -- Slow: multiplicador de velocidade (0.6 = 40% mais lento)
+	duration: number?, -- Slow: segundos
+}
+export type UnitEvolution = {
+	displayName: string, -- nome novo no nivel 4
+	accentColor: Color3, -- cor neon nova no nivel 4
+	ability: UnitAbility,
+}
+-- Status de UM nivel (valores absolutos, nao diferencas).
+export type UnitLevel = {
+	cost: number, -- preco para subir PARA este nivel
+	damage: number,
+	range: number,
+	cooldown: number,
+	splashRadius: number,
+	evolution: UnitEvolution?, -- so na entrada do nivel 4
+}
+
 -- Dados de um tipo de unidade/torre (vem do Config.UNITS).
 export type UnitDef = {
 	displayName: string,
@@ -76,6 +114,7 @@ export type UnitDef = {
 	accentColor: Color3, -- partes neon e projetil
 	height: number,
 	attackStyle: AttackStyle,
+	upgrades: { UnitLevel }, -- exatamente 3: upgrades[1] = nivel 2, [2] = nivel 3, [3] = nivel 4
 }
 
 -- Uma linha do "retrato" dos inimigos vivos (EnemyService.snapshot).
@@ -83,6 +122,7 @@ export type SnapshotEntry = {
 	id: string,
 	distance: number, -- studs andados no caminho
 	position: Vector3, -- centro do inimigo no mundo
+	kind: string, -- tipo (Grunt, Oni...) usado pelo Slow para chefes
 }
 
 -- Um grupo de inimigos do mesmo tipo dentro de uma onda.

@@ -48,11 +48,23 @@ local STYLE_SLASH = 2
 local STYLE_ORB = 3
 local HIDDEN_POSITION = Vector3.new(0, -500, 0)
 
+-- Semana 4 (upgrade e venda). Nao criamos pools novos: reaproveitamos faiscas (12),
+-- aneis (8), explosoes (4), confete (8) e numeros (20) que ja existem. Limites iguais ao da semana 3.
+local DEFAULT_MAX_LEVEL = 4
+local EVOLVE_ANTICIPATION = 0.25 -- segundos de "carregando" antes da explosao da evolucao
+local EVOLVE_POWER = 1.5 -- a explosao do Lv4 e 50% maior que a de colocar
+local EVOLVE_SHAKE_RANGE = 90 -- so treme a camera de quem esta perto da evolucao
+local SLOW_RING_COLOR = Color3.fromRGB(170, 225, 255)
+local CRIT_COLOR = Color3.fromRGB(255, 235, 120)
+local COIN_COLOR = Color3.fromRGB(255, 205, 40)
+local SLOW_RING_FALLBACK_DIAMETER = 10
+
 -- Animacoes reaproveitadas.
 local POP_IN = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local NUMBER_POP = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local NUMBER_RISE = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local NUMBER_FADE = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.5)
+local NUMBER_FADE =
+	TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.5)
 local BANNER_FADE = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local FLASH_FADE = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local LIGHT_FADE = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -140,6 +152,8 @@ local nextPlace = 1
 local activeProjectiles = 0
 local projectileConnection: RBXScriptConnection? = nil
 local visualCache: { [string]: UnitVisual } = {}
+local evoVisualCache: { [string]: UnitVisual } = {}
+local isDestroyed = false
 
 local flashFrame: Frame? = nil
 local flashTween: Tween? = nil
@@ -190,7 +204,12 @@ end
 -- Confete 3D (pool de Parts com ParticleEmitters)
 -- ---------------------------------------------------------------------------
 
-local function makeBurstSlot(folder: Folder, colors: { Color3 }, speedMax: number, sizeMax: number): BurstSlot
+local function makeBurstSlot(
+	folder: Folder,
+	colors: { Color3 },
+	speedMax: number,
+	sizeMax: number
+): BurstSlot
 	-- ParticleEmitter precisa de um Part "normal" (invisivel e sem colisao).
 	local part = Instance.new("Part")
 	part.Name = "BurstSlot"
@@ -243,7 +262,13 @@ local function makeBurstSlot(folder: Folder, colors: { Color3 }, speedMax: numbe
 	return { part = part, emitters = emitters, light = light, lightTween = nil }
 end
 
-local function burst(slots: { BurstSlot }, index: number, position: Vector3, perColor: number, lightColor: Color3)
+local function burst(
+	slots: { BurstSlot },
+	index: number,
+	position: Vector3,
+	perColor: number,
+	lightColor: Color3
+)
 	local slot = slots[index]
 	slot.part.Position = position
 	for _, emitter in slot.emitters do
@@ -308,10 +333,19 @@ local function makeNumberSlot(folder: Folder): NumberSlot
 	local scale = Instance.new("UIScale")
 	scale.Parent = label
 
-	return { part = part, gui = gui, label = label, scale = scale, stroke = stroke, token = 0, tweens = {} }
+	return {
+		part = part,
+		gui = gui,
+		label = label,
+		scale = scale,
+		stroke = stroke,
+		token = 0,
+		tweens = {},
+	}
 end
 
-local function showNumber(position: Vector3, text: string)
+-- color e popScale sao opcionais: sem eles, cor aleatoria da paleta e pop normal.
+local function showNumber(position: Vector3, text: string, color: Color3?, popScale: number?)
 	local slot = numberSlots[nextNumber]
 	nextNumber = nextNumber % #numberSlots + 1 -- se todos estao em uso, reaproveita o mais antigo
 
@@ -319,17 +353,19 @@ local function showNumber(position: Vector3, text: string)
 	local myToken = slot.token
 	cancelAll(slot.tweens)
 
-	slot.part.Position = position + Vector3.new((math.random() - 0.5) * 3, 1, (math.random() - 0.5) * 3)
+	slot.part.Position = position
+		+ Vector3.new((math.random() - 0.5) * 3, 1, (math.random() - 0.5) * 3)
 	slot.gui.StudsOffsetWorldSpace = Vector3.new(0, 2, 0)
 	slot.label.Text = text
-	slot.label.TextColor3 = randomColor()
+	slot.label.TextColor3 = color or randomColor()
 	slot.label.TextTransparency = 0
 	slot.stroke.Transparency = 0
 	slot.scale.Scale = 0.2
 	slot.gui.Enabled = true
 
-	local pop = TweenService:Create(slot.scale, NUMBER_POP, { Scale = 1.2 })
-	local rise = TweenService:Create(slot.gui, NUMBER_RISE, { StudsOffsetWorldSpace = Vector3.new(0, 6, 0) })
+	local pop = TweenService:Create(slot.scale, NUMBER_POP, { Scale = popScale or 1.2 })
+	local rise =
+		TweenService:Create(slot.gui, NUMBER_RISE, { StudsOffsetWorldSpace = Vector3.new(0, 6, 0) })
 	local fadeText = TweenService:Create(slot.label, NUMBER_FADE, { TextTransparency = 1 })
 	local fadeStroke = TweenService:Create(slot.stroke, NUMBER_FADE, { Transparency = 1 })
 	table.insert(slot.tweens, pop)
@@ -385,7 +421,9 @@ local function getVisual(kind: string): UnitVisual
 		visual = {
 			style = styleFromName(entry.attackStyle, kind),
 			color = if typeof(entry.color) == "Color3" then entry.color else PALETTE[5],
-			accent = if typeof(entry.accentColor) == "Color3" then entry.accentColor else PALETTE[2],
+			accent = if typeof(entry.accentColor) == "Color3"
+				then entry.accentColor
+				else PALETTE[2],
 			splash = if typeof(entry.splashRadius) == "number" then entry.splashRadius else 0,
 			height = if typeof(entry.height) == "number" then entry.height else 4,
 		}
@@ -400,6 +438,75 @@ local function getVisual(kind: string): UnitVisual
 	end
 	visualCache[kind] = visual
 	return visual
+end
+
+-- Visual do Lv4: igual ao normal, mas com a cor da evolucao e o splash do nivel 4.
+-- Tambem fica em cache (uma tabela por tipo, criada so na primeira vez).
+local function getEvoVisual(kind: string): UnitVisual
+	local cached = evoVisualCache[kind]
+	if cached then
+		return cached
+	end
+	local base = getVisual(kind)
+	local accent = base.accent
+	local splash = base.splash
+	local entry: any = nil
+	local units: any = Config.UNITS
+	if typeof(units) == "table" then
+		entry = units[kind]
+	end
+	if typeof(entry) == "table" and typeof(entry.upgrades) == "table" then
+		local lastLevel: any = entry.upgrades[Config.MAX_UNIT_LEVEL - 1]
+		if typeof(lastLevel) == "table" then
+			if typeof(lastLevel.splashRadius) == "number" then
+				splash = lastLevel.splashRadius
+			end
+			if
+				typeof(lastLevel.evolution) == "table"
+				and typeof(lastLevel.evolution.accentColor) == "Color3"
+			then
+				accent = lastLevel.evolution.accentColor
+			end
+		end
+	end
+	local visual: UnitVisual = {
+		style = base.style,
+		color = base.color,
+		accent = accent,
+		splash = splash,
+		height = base.height,
+	}
+	evoVisualCache[kind] = visual
+	return visual
+end
+
+local function getMaxLevel(): number
+	local value: any = Config.MAX_UNIT_LEVEL
+	if typeof(value) == "number" and value >= 1 then
+		return math.floor(value)
+	end
+	return DEFAULT_MAX_LEVEL
+end
+
+-- Acha o modelo da unidade pelo id (o servidor nomeia o modelo com o id). Pode nao existir (ja vendida).
+local function findUnitModel(id: string): Instance?
+	local units = workspace:FindFirstChild("Units")
+	if units then
+		return units:FindFirstChild(id)
+	end
+	return nil
+end
+
+-- Visual certo para um ataque: evoluida (Lv4) usa a cor da evolucao.
+local function visualFor(id: string, kind: string): UnitVisual
+	local model = findUnitModel(id)
+	if model then
+		local level = model:GetAttribute("Level")
+		if typeof(level) == "number" and level >= getMaxLevel() then
+			return getEvoVisual(kind)
+		end
+	end
+	return getVisual(kind)
 end
 
 -- ---------------------------------------------------------------------------
@@ -492,22 +599,81 @@ end
 -- O cilindro do Roblox tem o eixo no X; girar 90 graus em Z deixa ele "deitado" (fino na vertical).
 local FLAT = CFrame.Angles(0, 0, math.rad(90))
 
-local function playRing(slot: RingSlot, position: Vector3, color: Color3, diameter: number, info: TweenInfo)
+local function playRing(
+	slot: RingSlot,
+	position: Vector3,
+	color: Color3,
+	diameter: number,
+	info: TweenInfo
+)
 	cancelAll(slot.tweens)
 	local part = slot.part
 	part.Color = color
 	part.Size = Vector3.new(0.35, 1, 1)
 	part.Transparency = 0.15
 	part.CFrame = CFrame.new(position) * FLAT
-	local grow = TweenService:Create(part, info, { Size = Vector3.new(0.35, diameter, diameter), Transparency = 1 })
+	local grow = TweenService:Create(
+		part,
+		info,
+		{ Size = Vector3.new(0.35, diameter, diameter), Transparency = 1 }
+	)
 	table.insert(slot.tweens, grow)
 	grow:Play()
 end
 
-local function ring(position: Vector3, color: Color3, diameter: number)
+-- Anel que SOBE enquanto cresce (explosao de upgrade): CFrame e Size animam juntos num tween so.
+local function playRingRise(
+	slot: RingSlot,
+	position: Vector3,
+	color: Color3,
+	diameter: number,
+	rise: number,
+	info: TweenInfo
+)
+	cancelAll(slot.tweens)
+	local part = slot.part
+	part.Color = color
+	part.Size = Vector3.new(0.35, 1, 1)
+	part.Transparency = 0.15
+	part.CFrame = CFrame.new(position) * FLAT
+	local grow = TweenService:Create(part, info, {
+		Size = Vector3.new(0.35, diameter, diameter),
+		Transparency = 1,
+		CFrame = CFrame.new(position + Vector3.new(0, rise, 0)) * FLAT,
+	})
+	table.insert(slot.tweens, grow)
+	grow:Play()
+end
+
+-- Anel que ENCOLHE ate o centro (venda: a unidade "implode").
+local function playRingShrink(
+	slot: RingSlot,
+	position: Vector3,
+	color: Color3,
+	diameter: number,
+	info: TweenInfo
+)
+	cancelAll(slot.tweens)
+	local part = slot.part
+	part.Color = color
+	part.Size = Vector3.new(0.35, diameter, diameter)
+	part.Transparency = 0.15
+	part.CFrame = CFrame.new(position) * FLAT
+	local shrink =
+		TweenService:Create(part, info, { Size = Vector3.new(0.35, 0.6, 0.6), Transparency = 1 })
+	table.insert(slot.tweens, shrink)
+	shrink:Play()
+end
+
+-- rise e opcional: com ele o anel sobe enquanto cresce.
+local function ring(position: Vector3, color: Color3, diameter: number, rise: number?)
 	local slot = ringSlots[nextRing]
 	nextRing = nextRing % #ringSlots + 1
-	playRing(slot, position, color, diameter, RING_INFO)
+	if rise then
+		playRingRise(slot, position, color, diameter, rise, RING_INFO)
+	else
+		playRing(slot, position, color, diameter, RING_INFO)
+	end
 end
 
 -- ---------------------------------------------------------------------------
@@ -710,15 +876,29 @@ local function makePlaceSlot(folder: Folder): PlaceSlot
 	light.Shadows = false
 	light.Parent = sphere
 
-	return { sphere = sphere, pillar = pillar, ring = makeRingSlot(folder), light = light, tweens = {} }
+	return {
+		sphere = sphere,
+		pillar = pillar,
+		ring = makeRingSlot(folder),
+		light = light,
+		tweens = {},
+	}
 end
 
-local function placeExplosion(position: Vector3, visual: UnitVisual)
+-- power (opcional, padrao 1) aumenta tudo; pillarMix (opcional) = quanto da cor entra no pilar
+-- (0 = pilar todo branco, 1 = pilar todo colorido). A evolucao usa power alto e pilar quase branco.
+local function placeExplosion(
+	position: Vector3,
+	visual: UnitVisual,
+	power: number?,
+	pillarMix: number?
+)
 	local slot = placeSlots[nextPlace]
 	nextPlace = nextPlace % #placeSlots + 1
 	cancelAll(slot.tweens)
 
 	local accent = visual.accent
+	local strength = power or 1
 
 	-- Esfera de luz que cresce e some.
 	slot.sphere.Color = accent
@@ -726,16 +906,24 @@ local function placeExplosion(position: Vector3, visual: UnitVisual)
 	slot.sphere.Transparency = 0.2
 	-- position e o pe da unidade: centra a esfera na altura do corpo.
 	slot.sphere.Position = position + Vector3.new(0, visual.height * 0.5, 0)
-	local grow = TweenService:Create(slot.sphere, SPHERE_INFO, { Size = Vector3.one * 11, Transparency = 1 })
+	local grow = TweenService:Create(
+		slot.sphere,
+		SPHERE_INFO,
+		{ Size = Vector3.one * 11 * strength, Transparency = 1 }
+	)
 
 	-- Pilar de luz vertical (cilindro em pe: Size.X e a altura).
-	local pillarHeight = 18
-	slot.pillar.Color = Color3.new(1, 1, 1):Lerp(accent, 0.4)
-	slot.pillar.Size = Vector3.new(pillarHeight, 4, 4)
+	local pillarHeight = 18 * strength
+	slot.pillar.Color = Color3.new(1, 1, 1):Lerp(accent, pillarMix or 0.4)
+	slot.pillar.Size = Vector3.new(pillarHeight, 4 * strength, 4 * strength)
 	slot.pillar.Transparency = 0.2
 	slot.pillar.CFrame = CFrame.new(position + Vector3.new(0, pillarHeight * 0.5 + 0.2, 0)) * FLAT
 	-- So a espessura encolhe; o comprimento fica fixo para a base nao afundar no chao.
-	local rise = TweenService:Create(slot.pillar, PILLAR_INFO, { Size = Vector3.new(pillarHeight, 0.4, 0.4), Transparency = 1 })
+	local rise = TweenService:Create(
+		slot.pillar,
+		PILLAR_INFO,
+		{ Size = Vector3.new(pillarHeight, 0.4, 0.4), Transparency = 1 }
+	)
 
 	-- Flash de luz.
 	slot.light.Color = accent
@@ -751,7 +939,59 @@ local function placeExplosion(position: Vector3, visual: UnitVisual)
 
 	-- Anel no chao (usa o proprio anel do slot, reservado para esta explosao).
 	cancelAll(slot.ring.tweens)
-	playRing(slot.ring, position + Vector3.new(0, 0.35, 0), accent, 14, PLACE_RING_INFO)
+	playRing(slot.ring, position + Vector3.new(0, 0.35, 0), accent, 14 * strength, PLACE_RING_INFO)
+end
+
+-- Antecipacao da evolucao: uma esfera de luz grande e fraca SUGA para dentro da unidade (0.25 s).
+local function anticipationGlow(position: Vector3, visual: UnitVisual)
+	local slot = placeSlots[nextPlace]
+	nextPlace = nextPlace % #placeSlots + 1
+	cancelAll(slot.tweens)
+
+	slot.sphere.Color = Color3.new(1, 1, 1):Lerp(visual.accent, 0.5)
+	slot.sphere.Size = Vector3.one * 9
+	slot.sphere.Transparency = 0.5
+	slot.sphere.Position = position + Vector3.new(0, visual.height * 0.5, 0)
+	local info = TweenInfo.new(EVOLVE_ANTICIPATION, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	-- Termina invisivel (Transparency 1), entao nao precisa limpar nada depois.
+	local pull =
+		TweenService:Create(slot.sphere, info, { Size = Vector3.one * 2, Transparency = 1 })
+	slot.light.Color = visual.accent
+	slot.light.Brightness = 2
+	local glow = TweenService:Create(slot.light, info, { Brightness = 8 })
+	table.insert(slot.tweens, pull)
+	table.insert(slot.tweens, glow)
+	pull:Play()
+	glow:Play()
+end
+
+-- Venda: esfera dourada e anel encolhem ate o centro (implode).
+local IMPLODE_INFO = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+local function implodeEffect(position: Vector3, height: number)
+	local slot = placeSlots[nextPlace]
+	nextPlace = nextPlace % #placeSlots + 1
+	cancelAll(slot.tweens)
+
+	local center = position + Vector3.new(0, height * 0.5, 0)
+	slot.sphere.Color = COIN_COLOR
+	slot.sphere.Size = Vector3.one * 9
+	slot.sphere.Transparency = 0.5
+	slot.sphere.Position = center
+	local shrink = TweenService:Create(
+		slot.sphere,
+		IMPLODE_INFO,
+		{ Size = Vector3.one * 0.8, Transparency = 1 }
+	)
+	slot.light.Color = COIN_COLOR
+	slot.light.Brightness = 5
+	local flash = TweenService:Create(slot.light, IMPLODE_INFO, { Brightness = 0 })
+	table.insert(slot.tweens, shrink)
+	table.insert(slot.tweens, flash)
+	shrink:Play()
+	flash:Play()
+
+	playRingShrink(slot.ring, position + Vector3.new(0, 0.35, 0), COIN_COLOR, 12, IMPLODE_INFO)
 end
 
 -- ---------------------------------------------------------------------------
@@ -792,7 +1032,11 @@ local function startShake(magnitude: number, duration: number)
 	if not shakeBound then
 		shakeBound = true
 		-- Prioridade logo DEPOIS da camera: ela calcula primeiro, nos deslocamos depois.
-		RunService:BindToRenderStep(SHAKE_BIND_NAME, Enum.RenderPriority.Camera.Value + 1, onShakeStep)
+		RunService:BindToRenderStep(
+			SHAKE_BIND_NAME,
+			Enum.RenderPriority.Camera.Value + 1,
+			onShakeStep
+		)
 	end
 end
 
@@ -889,7 +1133,14 @@ local function launchVictoryConfetti()
 		piece.Visible = true
 
 		-- DelayTime escalona a queda sem precisar de task.delay.
-		local info = TweenInfo.new(2.2 + math.random() * 1.8, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 0, false, math.random() * 0.9)
+		local info = TweenInfo.new(
+			2.2 + math.random() * 1.8,
+			Enum.EasingStyle.Linear,
+			Enum.EasingDirection.Out,
+			0,
+			false,
+			math.random() * 0.9
+		)
 		local tween = TweenService:Create(piece, info, {
 			Position = UDim2.fromScale(startX + (math.random() - 0.5) * 0.3, 1.08),
 			Rotation = startRotation + math.random(-720, 720),
@@ -913,7 +1164,11 @@ local function setGrade(saturation: number, brightness: number)
 	if old then
 		old:Cancel()
 	end
-	local tween = TweenService:Create(effect, GRADE_INFO, { Saturation = saturation, Brightness = brightness })
+	local tween = TweenService:Create(
+		effect,
+		GRADE_INFO,
+		{ Saturation = saturation, Brightness = brightness }
+	)
 	gradeTween = tween
 	tween:Play()
 end
@@ -927,7 +1182,13 @@ local function onEnemyDied(_id: string, reason: string, position: Vector3, rewar
 		return
 	end
 	if reason == "Killed" then
-		burst(burstSlots, nextBurst, position, CONFETTI_PER_COLOR, PALETTE[math.random(1, #PALETTE)])
+		burst(
+			burstSlots,
+			nextBurst,
+			position,
+			CONFETTI_PER_COLOR,
+			PALETTE[math.random(1, #PALETTE)]
+		)
 		nextBurst = nextBurst % #burstSlots + 1
 		showNumber(position, "+" .. tostring(reward))
 		playPing(0.25, 1.2, 1.8)
@@ -984,11 +1245,122 @@ local function onUnitPlaced(_id: string, kind: string, position: Vector3, ownerU
 	end
 end
 
-local function onUnitAttacked(_id: string, kind: string, from: Vector3, to: Vector3)
-	if typeof(kind) ~= "string" or typeof(from) ~= "Vector3" or typeof(to) ~= "Vector3" then
+-- special: "Crit", "Slow" ou nil (5o argumento novo da semana 4; MultiShot manda 1 evento por alvo).
+local function onUnitAttacked(
+	id: string,
+	kind: string,
+	from: Vector3,
+	to: Vector3,
+	special: string?
+)
+	if
+		typeof(id) ~= "string"
+		or typeof(kind) ~= "string"
+		or typeof(from) ~= "Vector3"
+		or typeof(to) ~= "Vector3"
+	then
 		return
 	end
-	launchProjectile(getVisual(kind), from, to)
+	local visual = visualFor(id, kind) -- Lv4 usa a cor da evolucao
+	launchProjectile(visual, from, to)
+
+	if special == "Crit" then
+		-- Faisca bigger + texto "CRIT!" (usa o pool de numeros, nada novo e criado).
+		spark(to, CRIT_COLOR, 26)
+		showNumber(to + Vector3.new(0, 1.5, 0), "CRIT!", CRIT_COLOR, 1.5)
+	elseif special == "Slow" then
+		-- Anel azul claro no chao com o tamanho da area de dano do Lv4.
+		local diameter = if visual.splash > 0
+			then visual.splash * 2
+			else SLOW_RING_FALLBACK_DIAMETER
+		ring(Vector3.new(to.X, 0.3, to.Z), SLOW_RING_COLOR, diameter)
+	end
+end
+
+-- Upgrade: Lv2/3 = explosao subindo; Lv4 = momento de EVOLUCAO.
+local function onUnitUpgraded(id: string, level: number, position: Vector3)
+	if typeof(id) ~= "string" or typeof(level) ~= "number" or typeof(position) ~= "Vector3" then
+		return
+	end
+	-- Descobre o tipo pelo modelo; se ele nao chegou, usa visual reserva (ninguem quebra).
+	local model = findUnitModel(id)
+	local kindValue = if model then model:GetAttribute("Kind") else nil
+	local kind = if typeof(kindValue) == "string" then kindValue else "Ninja"
+	local evolved = level >= getMaxLevel()
+	local visual = if evolved then getEvoVisual(kind) else getVisual(kind)
+	local accent = visual.accent
+	local center = position + Vector3.new(0, visual.height * 0.5, 0)
+
+	if not evolved then
+		-- Lv2/3: anel que sobe + faiscas na cor da unidade + texto.
+		ring(position + Vector3.new(0, 0.35, 0), accent, 9 + level * 2, visual.height)
+		spark(center, accent, 20)
+		showNumber(
+			position + Vector3.new(0, visual.height, 0),
+			"LV " .. tostring(level) .. "!",
+			accent,
+			1.3
+		)
+		playPing(0.3, 0.9 + level * 0.15, 1.2 + level * 0.15)
+		return
+	end
+
+	-- Lv4: primeiro a antecipacao (0.25 s), depois a explosao grande.
+	anticipationGlow(position, visual)
+	playPing(0.2, 0.6, 0.7)
+	task.delay(EVOLVE_ANTICIPATION, function()
+		if isDestroyed then
+			return
+		end
+		-- Flash: pilar quase todo branco + esfera + anel (placeExplosion), com forca extra.
+		placeExplosion(position, visual, EVOLVE_POWER, 0.15)
+		-- Anel duplo: um colorido subindo e um branco menor logo atras.
+		ring(position + Vector3.new(0, 0.5, 0), accent, 24, visual.height)
+		ring(position + Vector3.new(0, 0.5, 0), Color3.new(1, 1, 1), 14)
+		-- Confete (reaproveita o pool) e faiscas.
+		burst(burstSlots, nextBurst, center, CONFETTI_PER_COLOR * 2, accent)
+		nextBurst = nextBurst % #burstSlots + 1
+		spark(center, accent, 30)
+		showNumber(position + Vector3.new(0, visual.height + 1, 0), "EVOLVED!", accent, 1.6)
+		playPing(0.35, 1.4, 1.7)
+		-- Tremor pequeno e curto, so se a camera esta perto.
+		local camera = workspace.CurrentCamera
+		if camera and (camera.CFrame.Position - position).Magnitude < EVOLVE_SHAKE_RANGE then
+			startShake(0.3, 0.3)
+		end
+	end)
+end
+
+-- Venda: implode + moedinhas. O texto "+$" so aparece para o dono da unidade.
+local function onUnitSold(id: string, position: Vector3, refund: number, ownerUserId: number)
+	if typeof(id) ~= "string" or typeof(position) ~= "Vector3" or typeof(refund) ~= "number" then
+		return
+	end
+	-- O modelo ja pode ter sumido (servidor removeu antes de avisar): altura reserva.
+	local model = findUnitModel(id)
+	local kindValue = if model then model:GetAttribute("Kind") else nil
+	local height = if typeof(kindValue) == "string" then getVisual(kindValue).height else 4
+	local center = position + Vector3.new(0, height * 0.5, 0)
+
+	implodeEffect(position, height)
+	playPing(0.25, 0.7, 0.9)
+	-- As moedas saltam quando a implosao termina.
+	task.delay(0.28, function()
+		if isDestroyed then
+			return
+		end
+		spark(center, COIN_COLOR, 24)
+		spark(center, Color3.new(1, 1, 1), 8)
+		playPing(0.3, 1.6, 2)
+	end)
+	if ownerUserId == Players.LocalPlayer.UserId then
+		showNumber(
+			position + Vector3.new(0, height, 0),
+			"+$" .. tostring(math.floor(refund)),
+			COIN_COLOR,
+			1.3
+		)
+	end
 end
 
 local function makeLabelBase(parent: Instance): (TextLabel, UIStroke, UIScale)
@@ -1119,10 +1491,15 @@ function FxController.start()
 			end)
 		)
 	end
+
+	-- Eventos da semana 4 por ultimo: se o servidor ainda nao criou o remote, o resto ja esta ligado.
+	table.insert(connections, Net.event("UnitUpgraded").OnClientEvent:Connect(onUnitUpgraded))
+	table.insert(connections, Net.event("UnitSold").OnClientEvent:Connect(onUnitSold))
 end
 
 -- Limpeza explicita (nao usada no jogo normal): desliga tudo e solta a camera.
 function FxController.destroy()
+	isDestroyed = true -- os task.delay pendentes (evolucao/venda) conferem isto e nao fazem nada
 	stopShake()
 	local projectileLoop = projectileConnection
 	if projectileLoop then

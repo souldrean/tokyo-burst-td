@@ -84,6 +84,38 @@ local PlacementController = {}
 
 local connections: { RBXScriptConnection } = {}
 
+-- Estado no nivel do modulo (e nao dentro de start): assim o UnitPanelController
+-- consegue perguntar "estou colocando?" mesmo que o start dele rode antes deste.
+local placing = false
+local placingListeners: { (boolean) -> () } = {}
+
+-- Responde se um card esta selecionado agora.
+function PlacementController.isPlacing(): boolean
+	return placing
+end
+
+-- Avisa quando entra/sai do modo de colocacao. Devolve uma funcao que desliga o aviso.
+function PlacementController.onPlacingChanged(callback: (boolean) -> ()): () -> ()
+	table.insert(placingListeners, callback)
+	return function()
+		local index = table.find(placingListeners, callback)
+		if index then
+			table.remove(placingListeners, index)
+		end
+	end
+end
+
+local function setPlacing(value: boolean)
+	if placing == value then
+		return
+	end
+	placing = value
+	-- Copia da lista: um callback pode se desligar enquanto percorremos.
+	for _, callback in table.clone(placingListeners) do
+		callback(value)
+	end
+end
+
 function PlacementController.init() end
 
 function PlacementController.start()
@@ -149,7 +181,8 @@ function PlacementController.start()
 	local toastHolder = Instance.new("Frame")
 	toastHolder.Name = "Toasts"
 	toastHolder.AnchorPoint = Vector2.new(0.5, 0)
-	toastHolder.Position = UDim2.fromScale(0.5, 0.2)
+	-- Alto na tela (y 0.07) para o painel de unidade (y 0.28-0.76) nao cobrir os avisos.
+	toastHolder.Position = UDim2.fromScale(0.5, 0.07)
 	toastHolder.Size = UDim2.fromScale(0.42, 0.22)
 	toastHolder.BackgroundTransparency = 1
 	toastHolder.Parent = gui
@@ -164,7 +197,8 @@ function PlacementController.start()
 			if old then
 				old:Cancel()
 			end
-			local tween = TweenService:Create(toast.group, TOAST_IN, { Position = toastPosition(index) })
+			local tween =
+				TweenService:Create(toast.group, TOAST_IN, { Position = toastPosition(index) })
 			toast.moveTween = tween
 			tween:Play()
 		end
@@ -234,7 +268,8 @@ function PlacementController.start()
 		limit.MaxTextSize = 28
 		limit.Parent = label
 
-		local toast: Toast = { group = group, moveTween = nil, fadeTween = nil, thread = nil, dead = false }
+		local toast: Toast =
+			{ group = group, moveTween = nil, fadeTween = nil, thread = nil, dead = false }
 		table.insert(toasts, 1, toast)
 		layoutToasts()
 		TweenService:Create(group, FAST, { GroupTransparency = 0 }):Play()
@@ -409,7 +444,8 @@ function PlacementController.start()
 		end
 		if isSelected then
 			card.stroke.Color = WHITE
-			local glow = TweenService:Create(card.stroke, GLOW, { Thickness = 8, Color = card.accent })
+			local glow =
+				TweenService:Create(card.stroke, GLOW, { Thickness = 8, Color = card.accent })
 			card.glowTween = glow
 			glow:Play()
 		else
@@ -434,6 +470,7 @@ function PlacementController.start()
 		end
 
 		local active = card ~= nil
+		setPlacing(active)
 		hint.Visible = active
 		cancelButton.Visible = active
 		if active and not wasActive then
@@ -743,7 +780,10 @@ function PlacementController.start()
 				return
 			end
 			local endPos = Vector2.new(input.Position.X, input.Position.Y)
-			if (endPos - touchStart).Magnitude <= TAP_MAX_MOVE and os.clock() - touchTime <= TAP_MAX_TIME then
+			if
+				(endPos - touchStart).Magnitude <= TAP_MAX_MOVE
+				and os.clock() - touchTime <= TAP_MAX_TIME
+			then
 				tryPlaceAt(endPos)
 			end
 		end)
@@ -764,11 +804,13 @@ function PlacementController.start()
 	-- Se a nossa unidade foi criada e ainda estamos no modo, sai dele.
 	table.insert(
 		connections,
-		placedRemote.OnClientEvent:Connect(function(_id: unknown, _kind: unknown, _position: unknown, ownerUserId: unknown)
-			if ownerUserId == localPlayer.UserId and selected then
-				exitPlacement()
+		placedRemote.OnClientEvent:Connect(
+			function(_id: unknown, _kind: unknown, _position: unknown, ownerUserId: unknown)
+				if ownerUserId == localPlayer.UserId and selected then
+					exitPlacement()
+				end
 			end
-		end)
+		)
 	)
 
 	-- Dinheiro mudou -> atualiza cards escurecidos.
@@ -820,6 +862,8 @@ function PlacementController.destroy()
 		connection:Disconnect()
 	end
 	table.clear(connections)
+	table.clear(placingListeners)
+	placing = false
 end
 
 return PlacementController

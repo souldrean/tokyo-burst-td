@@ -137,6 +137,16 @@ local function runMatch(): Types.MatchResult
 		if BaseService.isDead() then
 			return "Defeat"
 		end
+
+		-- Pausa so se a onda foi LIMPA (ninguem vivo) e nao e a ultima. Se acabou por
+		-- tempo com inimigos vivos, nao tem pausa (o jogo ja esta apertado).
+		if not isLast and EnemyService.aliveCount() == 0 then
+			local breakEndsAt = workspace:GetServerTimeNow() + Config.WAVE_BREAK_SECONDS
+			setState("Intermission", breakEndsAt) -- libera venda a 100% e o HUD mostra a contagem
+			while workspace:GetServerTimeNow() < breakEndsAt and not BaseService.isDead() do
+				task.wait(POLL_SECONDS)
+			end
+		end
 	end
 
 	return "Victory"
