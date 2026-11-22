@@ -48,11 +48,11 @@ export type MatchStateName = "Waiting" | "Intermission" | "Wave" | "Victory" | "
 --   UnitAttacked(id: string, kind: string, from: Vector3, to: Vector3, special: string?) <- todos
 --       special = "Crit" (golpe critico), "Slow" (Mago congelou), nil = normal
 --   (semana 4)
---   UpgradeUnit(id: string)                           <- cliente -> servidor
+--   UpgradeUnit(id: string, fromLevel: number)        <- cliente -> servidor (ignorado se fromLevel ~= nivel real: evita upgrade duplo)
 --   SellUnit(id: string)                              <- cliente -> servidor
 --   DebugGiveCash()                                   <- cliente -> servidor (so no Studio)
 --   UnitUpgraded(id: string, level: number, position: Vector3)                     <- todos
---   UnitSold(id: string, position: Vector3, refund: number, ownerUserId: number)   <- todos
+--   UnitSold(id: string, position: Vector3, refund: number, ownerUserId: number, kind: string)   <- todos
 --   Notify(text: string)                              <- servidor -> UM cliente
 export type EnemyDiedPayload = {
 	id: string,

@@ -199,6 +199,9 @@ local Config = {
 	MAX_UNIT_LEVEL = 4,
 	-- estado da partida -> parte do dinheiro devolvida; estado ausente = nao pode vender.
 	SELL_REFUND = { Intermission = 1, Wave = 0.6 } :: { [string]: number },
+	-- Folga (s) depois que a pausa acaba em que a venda ainda paga a taxa da pausa:
+	-- o botao mostra 100% no fim da pausa, e o pedido chega um pouco depois (latencia).
+	SELL_GRACE_SECONDS = 0.5,
 	UPGRADE_ALLOWED_STATES = { Intermission = true, Wave = true } :: { [string]: boolean },
 	BOSS_KINDS = { Oni = true } :: { [string]: boolean }, -- chefes sao menos afetados pelo Slow
 	BOSS_SLOW_FACTOR = 0.8,

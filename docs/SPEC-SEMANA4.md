@@ -107,7 +107,8 @@ The client uses UnitMath only to DISPLAY numbers. The server uses it as the auth
 
 ## Remotes (add to Types.RemoteName and to the payload comment block)
 CLIENT -> SERVER
-  UpgradeUnit(id: string)
+  UpgradeUnit(id: string, fromLevel: number)  -- level the client currently sees (Level attribute);
+                                              -- server silently ignores if fromLevel ~= unit.level (anti double-upgrade)
   SellUnit(id: string)
   DebugGiveCash()          -- Studio only, like DebugHitEnemy
 Server validation for Upgrade/Sell, in order (on fail: Notify that player and return,
@@ -128,7 +129,8 @@ except where "silent"):
     EconomyService.add(player, refund); fire UnitSold.
 SERVER -> ALL CLIENTS
   UnitUpgraded(id: string, level: number, position: Vector3)          -- position = unit feet
-  UnitSold(id: string, position: Vector3, refund: number, ownerUserId: number)
+  UnitSold(id: string, position: Vector3, refund: number, ownerUserId: number, kind: string)
+    -- kind = 5th arg: the model is already removed when this fires, so the client needs it for the FX height
   UnitAttacked(id: string, kind: string, from: Vector3, to: Vector3, special: string?)
     -- CHANGED: 5th arg appended (old handlers ignore it). special = "Crit" on a crit hit,
     -- "Slow" when a Frost Archmage attack applies slow, nil otherwise.

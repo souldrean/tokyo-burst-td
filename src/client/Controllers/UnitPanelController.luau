@@ -452,8 +452,14 @@ function UnitPanelController.start()
 		end
 		local id = model:GetAttribute("Id")
 		if typeof(id) == "string" then
+			-- Mandamos o nivel que estamos vendo: se dois cliques chegarem juntos, o servidor
+			-- ignora o segundo (o nivel real ja mudou) e nao cobra upgrade duplo.
+			local level = model:GetAttribute("Level")
+			if typeof(level) ~= "number" then
+				return
+			end
 			-- So pedimos. Se faltar dinheiro, o servidor responde com Notify (toast do Placement).
-			upgradeRemote:FireServer(id)
+			upgradeRemote:FireServer(id, level)
 		end
 	end
 

@@ -348,6 +348,28 @@ local function matchStateName(): string?
 	return nil
 end
 
+-- Quando o estado saiu de Intermission pela ultima vez (os.clock). Serve para dar uma folga
+-- na venda: o botao do cliente mostrava 100% no fim da pausa e o pedido chega um pouco depois.
+local lastState: string? = nil
+local leftIntermissionAt = -math.huge
+
+local function onMatchStateChanged()
+	local current = matchStateName()
+	if lastState == "Intermission" and current ~= "Intermission" then
+		leftIntermissionAt = os.clock()
+	end
+	lastState = current
+end
+
+-- Estado usado so para calcular o reembolso: dentro da folga ainda vale o de Intermission.
+local function sellStateName(): string?
+	local current = matchStateName()
+	if current == "Wave" and os.clock() - leftIntermissionAt <= Config.SELL_GRACE_SECONDS then
+		return "Intermission"
+	end
+	return current
+end
+
 -- Destroi uma unidade e libera o slot dela.
 local function removeUnit(unit: Unit)
 	units[unit.id] = nil
@@ -482,9 +504,14 @@ local function resolveOwnUnit(player: Player, key: string, id: unknown): Unit?
 	return unit
 end
 
-local function onUpgradeUnit(player: Player, id: unknown)
+local function onUpgradeUnit(player: Player, id: unknown, fromLevel: unknown)
 	local unit = resolveOwnUnit(player, "Upgrade", id)
 	if not unit then
+		return
+	end
+	-- Pedido velho (silencioso): o cliente viu outro nivel que o real, entao ja houve um upgrade.
+	-- Sem isso, dois cliques rapidos comprariam dois niveis.
+	if typeof(fromLevel) ~= "number" or fromLevel ~= unit.level then
 		return
 	end
 	-- 5. So da para melhorar durante Intermission/Wave.
@@ -526,18 +553,20 @@ local function onSellUnit(player: Player, id: unknown)
 		return
 	end
 	-- 5. Reembolso depende do estado (100% na pausa, 60% na onda, nil = nao pode).
-	local refund = UnitMath.refundFor(unit.spent, matchStateName())
+	local refund = UnitMath.refundFor(unit.spent, sellStateName())
 	if refund == nil then
 		notify(player, "Can't sell right now")
 		return
 	end
 
+	-- Guarda os dados ANTES de remover (o modelo some) e manda o tipo para o cliente achar a altura.
 	local position = unit.position
 	local unitId = unit.id
+	local kind = unit.kind
 	removeUnit(unit) -- libera o slot e a contagem
 	EconomyService.add(player, refund)
 	if soldRemote then
-		soldRemote:FireAllClients(unitId, position, refund, player.UserId)
+		soldRemote:FireAllClients(unitId, position, refund, player.UserId, kind)
 	end
 end
 
@@ -760,6 +789,14 @@ function UnitService.start()
 		return
 	end
 	-- Acumula o tempo do Heartbeat e roda o combate 10x por segundo.
+	local matchFolder = ReplicatedStorage:FindFirstChild("MatchState")
+	if matchFolder then
+		lastState = matchStateName()
+		table.insert(
+			connections,
+			matchFolder:GetAttributeChangedSignal("State"):Connect(onMatchStateChanged)
+		)
+	end
 	local interval = 1 / Config.SERVER_TICK_RATE
 	local accumulated = 0
 	tickConnection = RunService.Heartbeat:Connect(function(dt: number)

@@ -211,6 +211,9 @@ local Config = {
 	MAX_UNIT_LEVEL = 4,
 	-- estado da partida -> parte do dinheiro devolvida; estado ausente = nao pode vender.
 	SELL_REFUND = { Intermission = 1, Wave = 0.6 } :: { [string]: number },
+	-- Folga (s) depois que a pausa acaba em que a venda ainda paga a taxa da pausa:
+	-- o botao mostra 100% no fim da pausa, e o pedido chega um pouco depois (latencia).
+	SELL_GRACE_SECONDS = 0.5,
 	UPGRADE_ALLOWED_STATES = { Intermission = true, Wave = true } :: { [string]: boolean },
 	BOSS_KINDS = { Oni = true } :: { [string]: boolean }, -- chefes sao menos afetados pelo Slow
 	BOSS_SLOW_FACTOR = 0.8,
@@ -342,11 +345,11 @@ export type MatchStateName = "Waiting" | "Intermission" | "Wave" | "Victory" | "
 --   UnitAttacked(id: string, kind: string, from: Vector3, to: Vector3, special: string?) <- todos
 --       special = "Crit" (golpe critico), "Slow" (Mago congelou), nil = normal
 --   (semana 4)
---   UpgradeUnit(id: string)                           <- cliente -> servidor
+--   UpgradeUnit(id: string, fromLevel: number)        <- cliente -> servidor (ignorado se fromLevel ~= nivel real: evita upgrade duplo)
 --   SellUnit(id: string)                              <- cliente -> servidor
 --   DebugGiveCash()                                   <- cliente -> servidor (so no Studio)
 --   UnitUpgraded(id: string, level: number, position: Vector3)                     <- todos
---   UnitSold(id: string, position: Vector3, refund: number, ownerUserId: number)   <- todos
+--   UnitSold(id: string, position: Vector3, refund: number, ownerUserId: number, kind: string)   <- todos
 --   Notify(text: string)                              <- servidor -> UM cliente
 export type EnemyDiedPayload = {
 	id: string,
@@ -2331,6 +2334,28 @@ local function matchStateName(): string?
 	return nil
 end
 
+-- Quando o estado saiu de Intermission pela ultima vez (os.clock). Serve para dar uma folga
+-- na venda: o botao do cliente mostrava 100% no fim da pausa e o pedido chega um pouco depois.
+local lastState: string? = nil
+local leftIntermissionAt = -math.huge
+
+local function onMatchStateChanged()
+	local current = matchStateName()
+	if lastState == "Intermission" and current ~= "Intermission" then
+		leftIntermissionAt = os.clock()
+	end
+	lastState = current
+end
+
+-- Estado usado so para calcular o reembolso: dentro da folga ainda vale o de Intermission.
+local function sellStateName(): string?
+	local current = matchStateName()
+	if current == "Wave" and os.clock() - leftIntermissionAt <= Config.SELL_GRACE_SECONDS then
+		return "Intermission"
+	end
+	return current
+end
+
 -- Destroi uma unidade e libera o slot dela.
 local function removeUnit(unit: Unit)
 	units[unit.id] = nil
@@ -2465,9 +2490,14 @@ local function resolveOwnUnit(player: Player, key: string, id: unknown): Unit?
 	return unit
 end
 
-local function onUpgradeUnit(player: Player, id: unknown)
+local function onUpgradeUnit(player: Player, id: unknown, fromLevel: unknown)
 	local unit = resolveOwnUnit(player, "Upgrade", id)
 	if not unit then
+		return
+	end
+	-- Pedido velho (silencioso): o cliente viu outro nivel que o real, entao ja houve um upgrade.
+	-- Sem isso, dois cliques rapidos comprariam dois niveis.
+	if typeof(fromLevel) ~= "number" or fromLevel ~= unit.level then
 		return
 	end
 	-- 5. So da para melhorar durante Intermission/Wave.
@@ -2509,18 +2539,20 @@ local function onSellUnit(player: Player, id: unknown)
 		return
 	end
 	-- 5. Reembolso depende do estado (100% na pausa, 60% na onda, nil = nao pode).
-	local refund = UnitMath.refundFor(unit.spent, matchStateName())
+	local refund = UnitMath.refundFor(unit.spent, sellStateName())
 	if refund == nil then
 		notify(player, "Can't sell right now")
 		return
 	end
 
+	-- Guarda os dados ANTES de remover (o modelo some) e manda o tipo para o cliente achar a altura.
 	local position = unit.position
 	local unitId = unit.id
+	local kind = unit.kind
 	removeUnit(unit) -- libera o slot e a contagem
 	EconomyService.add(player, refund)
 	if soldRemote then
-		soldRemote:FireAllClients(unitId, position, refund, player.UserId)
+		soldRemote:FireAllClients(unitId, position, refund, player.UserId, kind)
 	end
 end
 
@@ -2743,6 +2775,14 @@ function UnitService.start()
 		return
 	end
 	-- Acumula o tempo do Heartbeat e roda o combate 10x por segundo.
+	local matchFolder = ReplicatedStorage:FindFirstChild("MatchState")
+	if matchFolder then
+		lastState = matchStateName()
+		table.insert(
+			connections,
+			matchFolder:GetAttributeChangedSignal("State"):Connect(onMatchStateChanged)
+		)
+	end
 	local interval = 1 / Config.SERVER_TICK_RATE
 	local accumulated = 0
 	tickConnection = RunService.Heartbeat:Connect(function(dt: number)
@@ -4281,6 +4321,13 @@ local function anticipationGlow(position: Vector3, visual: UnitVisual)
 	slot.light.Color = visual.accent
 	slot.light.Brightness = 2
 	local glow = TweenService:Create(slot.light, info, { Brightness = 8 })
+	-- A explosao usa o PROXIMO slot, entao esta luz (alcance 26) ficaria acesa ate ser reusada:
+	-- apagamos ao terminar. So no Completed (um Cancelled significa que o slot ja foi reusado).
+	glow.Completed:Connect(function(state: Enum.PlaybackState)
+		if state == Enum.PlaybackState.Completed then
+			slot.light.Brightness = 0
+		end
+	end)
 	table.insert(slot.tweens, pull)
 	table.insert(slot.tweens, glow)
 	pull:Play()
@@ -4654,13 +4701,23 @@ local function onUnitUpgraded(id: string, level: number, position: Vector3)
 end
 
 -- Venda: implode + moedinhas. O texto "+$" so aparece para o dono da unidade.
-local function onUnitSold(id: string, position: Vector3, refund: number, ownerUserId: number)
+local function onUnitSold(
+	id: string,
+	position: Vector3,
+	refund: number,
+	ownerUserId: number,
+	kind: string?
+)
 	if typeof(id) ~= "string" or typeof(position) ~= "Vector3" or typeof(refund) ~= "number" then
 		return
 	end
-	-- O modelo ja pode ter sumido (servidor removeu antes de avisar): altura reserva.
-	local model = findUnitModel(id)
-	local kindValue = if model then model:GetAttribute("Kind") else nil
+	-- O servidor remove o modelo ANTES de avisar, entao o tipo vem no proprio evento.
+	-- O modelo fica so como plano B; sem nenhum dos dois, usa altura reserva.
+	local kindValue: unknown = kind
+	if typeof(kindValue) ~= "string" then
+		local model = findUnitModel(id)
+		kindValue = if model then model:GetAttribute("Kind") else nil
+	end
 	local height = if typeof(kindValue) == "string" then getVisual(kindValue).height else 4
 	local center = position + Vector3.new(0, height * 0.5, 0)
 
@@ -7364,8 +7421,14 @@ function UnitPanelController.start()
 		end
 		local id = model:GetAttribute("Id")
 		if typeof(id) == "string" then
+			-- Mandamos o nivel que estamos vendo: se dois cliques chegarem juntos, o servidor
+			-- ignora o segundo (o nivel real ja mudou) e nao cobra upgrade duplo.
+			local level = model:GetAttribute("Level")
+			if typeof(level) ~= "number" then
+				return
+			end
 			-- So pedimos. Se faltar dinheiro, o servidor responde com Notify (toast do Placement).
-			upgradeRemote:FireServer(id)
+			upgradeRemote:FireServer(id, level)
 		end
 	end
 

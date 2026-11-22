@@ -959,6 +959,13 @@ local function anticipationGlow(position: Vector3, visual: UnitVisual)
 	slot.light.Color = visual.accent
 	slot.light.Brightness = 2
 	local glow = TweenService:Create(slot.light, info, { Brightness = 8 })
+	-- A explosao usa o PROXIMO slot, entao esta luz (alcance 26) ficaria acesa ate ser reusada:
+	-- apagamos ao terminar. So no Completed (um Cancelled significa que o slot ja foi reusado).
+	glow.Completed:Connect(function(state: Enum.PlaybackState)
+		if state == Enum.PlaybackState.Completed then
+			slot.light.Brightness = 0
+		end
+	end)
 	table.insert(slot.tweens, pull)
 	table.insert(slot.tweens, glow)
 	pull:Play()
@@ -1332,13 +1339,23 @@ local function onUnitUpgraded(id: string, level: number, position: Vector3)
 end
 
 -- Venda: implode + moedinhas. O texto "+$" so aparece para o dono da unidade.
-local function onUnitSold(id: string, position: Vector3, refund: number, ownerUserId: number)
+local function onUnitSold(
+	id: string,
+	position: Vector3,
+	refund: number,
+	ownerUserId: number,
+	kind: string?
+)
 	if typeof(id) ~= "string" or typeof(position) ~= "Vector3" or typeof(refund) ~= "number" then
 		return
 	end
-	-- O modelo ja pode ter sumido (servidor removeu antes de avisar): altura reserva.
-	local model = findUnitModel(id)
-	local kindValue = if model then model:GetAttribute("Kind") else nil
+	-- O servidor remove o modelo ANTES de avisar, entao o tipo vem no proprio evento.
+	-- O modelo fica so como plano B; sem nenhum dos dois, usa altura reserva.
+	local kindValue: unknown = kind
+	if typeof(kindValue) ~= "string" then
+		local model = findUnitModel(id)
+		kindValue = if model then model:GetAttribute("Kind") else nil
+	end
 	local height = if typeof(kindValue) == "string" then getVisual(kindValue).height else 4
 	local center = position + Vector3.new(0, height * 0.5, 0)
 
