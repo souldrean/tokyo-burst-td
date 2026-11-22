@@ -19,13 +19,13 @@ local EnemyService = require(script.Parent.EnemyService)
 local EconomyService = require(script.Parent.EconomyService)
 local PathService = require(script.Parent.PathService)
 local UnitMath = require(Shared:WaitForChild("Util"):WaitForChild("UnitMath"))
+local UnitModels = require(script.Parent.Parent:WaitForChild("Units"):WaitForChild("UnitModels"))
 
 local UnitService = {}
 
 local MAX_NAME_LENGTH = 16
 local RATE_PER_SECOND = 4 -- maximo de PlaceUnit/UpgradeUnit/SellUnit por segundo (cada remote tem o seu balde)
 local BURST = 4
-local PEDESTAL_HEIGHT = 0.3
 
 type Unit = {
 	id: string,
@@ -125,216 +125,8 @@ local function nearestRoadPoint(from: Vector3): Vector3
 	return best
 end
 
--- Peca de enfeite soldada ao Root. offset e relativo ao "baseCFrame" (o chao, ja virado).
-local function decorate(
-	model: Model,
-	root: BasePart,
-	baseCFrame: CFrame,
-	name: string,
-	shape: Enum.PartType,
-	size: Vector3,
-	color: Color3,
-	neon: boolean,
-	offset: CFrame
-)
-	local part = Instance.new("Part")
-	part.Name = name
-	part.Shape = shape
-	part.Size = size
-	part.Color = color
-	part.Material = if neon then Enum.Material.Neon else Enum.Material.SmoothPlastic
-	part.Anchored = false
-	part.Massless = true
-	part.CanCollide = false
-	part.CanTouch = false
-	part.CanQuery = false
-	part.CFrame = baseCFrame * offset
-	part.Parent = model
-	if name == "Orb" then
-		-- Orb usa Weld real: o cliente anima C0 para o bob, e WeldConstraint nao tem C0 editavel.
-		local weld = Instance.new("Weld")
-		weld.Part0 = root
-		weld.Part1 = part
-		weld.C0 = root.CFrame:ToObjectSpace(part.CFrame)
-		weld.C1 = CFrame.new()
-		weld.Parent = part
-	else
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = root
-		weld.Part1 = part
-		weld.Parent = part
-	end
-end
-
--- Disco achatado (cilindro deitado para ficar "em pe" no eixo Y).
-local FLAT = CFrame.Angles(0, 0, math.pi / 2)
-
--- Monta o visual low-poly. baseCFrame fica no chao (topo do slot), olhando para a estrada.
--- O Root e um pedestal fino no chao; corpo, cabeca e acessorios sao soldados nele.
-local function buildModel(
-	id: string,
-	kind: string,
-	def: Types.UnitDef,
-	baseCFrame: CFrame
-): (Model, BasePart)
-	local model = Instance.new("Model")
-	model.Name = id
-
-	local root = Instance.new("Part")
-	root.Name = "Root"
-	root.Shape = Enum.PartType.Cylinder
-	root.Size = Vector3.new(PEDESTAL_HEIGHT, 3.2, 3.2)
-	root.Color = def.accentColor
-	root.Material = Enum.Material.Neon
-	root.Anchored = true
-	root.CanCollide = false
-	root.CanQuery = false
-	root.CanTouch = false
-	root.CFrame = baseCFrame * CFrame.new(0, PEDESTAL_HEIGHT / 2, 0) * FLAT
-	root.Parent = model
-	model.PrimaryPart = root
-
-	-- Hitbox invisivel: e a UNICA peca com CanQuery, o cliente faz raycast nela para selecionar.
-	local hitbox = Instance.new("Part")
-	hitbox.Name = "Hitbox"
-	hitbox.Size = Vector3.new(3.2, def.height + 0.6, 3.2)
-	hitbox.Transparency = 1
-	hitbox.Anchored = false
-	hitbox.Massless = true
-	hitbox.CanCollide = false
-	hitbox.CanTouch = false
-	hitbox.CanQuery = true
-	hitbox.CFrame = baseCFrame * CFrame.new(0, (def.height + 0.6) / 2, 0)
-	hitbox.Parent = model
-	local hitboxWeld = Instance.new("WeldConstraint")
-	hitboxWeld.Part0 = root
-	hitboxWeld.Part1 = hitbox
-	hitboxWeld.Parent = hitbox
-
-	local h = def.height
-	local bodyH = h * 0.45
-	local headD = h * 0.28
-	local bodyY = PEDESTAL_HEIGHT + bodyH / 2
-	local headY = PEDESTAL_HEIGHT + bodyH + headD * 0.45
-	local headTop = headY + headD / 2
-	local ball = Enum.PartType.Ball
-	local block = Enum.PartType.Block
-	local cyl = Enum.PartType.Cylinder
-
-	-- Corpo e cabeca (iguais para todos; so a cor muda).
-	decorate(
-		model,
-		root,
-		baseCFrame,
-		"Body",
-		block,
-		Vector3.new(2.1, bodyH, 1.5),
-		def.color,
-		false,
-		CFrame.new(0, bodyY, 0)
-	)
-	decorate(
-		model,
-		root,
-		baseCFrame,
-		"Head",
-		ball,
-		Vector3.new(headD, headD, headD),
-		def.color,
-		false,
-		CFrame.new(0, headY, 0)
-	)
-
-	if kind == "Ninja" then
-		-- Faixa neon na cabeca + cachecol neon com ponta solta atras (+Z = costas).
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"Headband",
-			block,
-			Vector3.new(headD * 1.06, 0.25, headD * 1.06),
-			def.accentColor,
-			true,
-			CFrame.new(0, headY + headD * 0.1, 0)
-		)
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"Scarf",
-			block,
-			Vector3.new(1.7, 0.35, 1.7),
-			def.accentColor,
-			true,
-			CFrame.new(0, PEDESTAL_HEIGHT + bodyH + 0.05, 0)
-		)
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"ScarfTail",
-			block,
-			Vector3.new(0.4, 0.2, 1.4),
-			def.accentColor,
-			true,
-			CFrame.new(0.5, PEDESTAL_HEIGHT + bodyH, 1.2) * CFrame.Angles(0.5, 0, 0)
-		)
-	elseif kind == "Samurai" then
-		-- Chapeu largo (disco) + katana neon ao lado.
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"Hat",
-			cyl,
-			Vector3.new(0.4, headD * 2.3, headD * 2.3),
-			def.color:Lerp(Color3.new(0, 0, 0), 0.35),
-			false,
-			CFrame.new(0, headTop - 0.05, 0) * FLAT
-		)
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"Katana",
-			block,
-			Vector3.new(0.18, h * 0.75, 0.18),
-			def.accentColor,
-			true,
-			CFrame.new(1.5, PEDESTAL_HEIGHT + bodyH * 0.8, -0.2) * CFrame.Angles(0, 0, -0.25)
-		)
-	elseif kind == "Mage" then
-		-- Chapeu "cone" feito de 3 discos que diminuem + orbe neon flutuando.
-		local widths = { headD * 1.9, headD * 1.4, headD * 0.8 }
-		for i, width in widths do
-			decorate(
-				model,
-				root,
-				baseCFrame,
-				"HatPart" .. tostring(i),
-				cyl,
-				Vector3.new(0.45, width, width),
-				def.color:Lerp(Color3.new(0, 0, 0), 0.25),
-				false,
-				CFrame.new(0, headTop + (i - 1) * 0.42, 0) * FLAT
-			)
-		end
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"Orb",
-			ball,
-			Vector3.new(1.1, 1.1, 1.1),
-			def.accentColor,
-			true,
-			CFrame.new(1.6, PEDESTAL_HEIGHT + bodyH + 0.6, 0)
-		)
-	end
-
-	return model, root
-end
+-- O visual (modelo chibi de cada personagem) mora em src/server/Units/UnitModels.luau.
+-- Aqui so pedimos para montar: mesmo contrato de antes (Root, Hitbox, frente = -Z).
 
 local function matchStateName(): string?
 	local folder = ReplicatedStorage:FindFirstChild("MatchState")
@@ -447,7 +239,7 @@ local function onPlaceUnit(player: Player, kind: unknown, slotName: unknown)
 		baseCFrame = CFrame.lookAt(ground, lookTarget)
 	end
 
-	local model, root = buildModel(id, kind, def, baseCFrame)
+	local model, root = UnitModels.build(id, kind, UnitModels.lookFor(kind, def), baseCFrame)
 	-- Atributos ANTES de parentar: o cliente ja ve tudo certo quando o modelo aparece.
 	model:SetAttribute("Id", id)
 	model:SetAttribute("Kind", kind)
@@ -542,6 +334,8 @@ local function onUpgradeUnit(player: Player, id: unknown, fromLevel: unknown)
 	unit.spent += cost
 	unit.model:SetAttribute("Level", unit.level)
 	unit.model:SetAttribute("Spent", unit.spent)
+	-- No nivel maximo aparecem as pecas de evolucao (capa, chifres, coroa...).
+	UnitModels.setLevel(unit.model, unit.level, Config.MAX_UNIT_LEVEL)
 	if upgradedRemote then
 		upgradedRemote:FireAllClients(unit.id, unit.level, unit.position)
 	end

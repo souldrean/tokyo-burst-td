@@ -98,7 +98,7 @@ local WAVES: { Types.WaveDef } = {
 -- Os slots ficam a ~12-14 studs do centro da estrada, por isso os alcances sao altos.
 local UNITS: { [string]: Types.UnitDef } = {
 	Ninja = {
-		displayName = "Ninja",
+		displayName = "Sumi • Ninja",
 		cost = 50,
 		range = 28,
 		damage = 8,
@@ -118,7 +118,7 @@ local UNITS: { [string]: Types.UnitDef } = {
 				cooldown = 0.45,
 				splashRadius = 0,
 				evolution = {
-					displayName = "Shadow Ninja",
+					displayName = "Sumi • Shadow Ninja",
 					accentColor = Color3.fromRGB(170, 80, 255),
 					ability = { kind = "MultiShot", description = "Throws 3 shurikens at once", targets = 3 },
 				},
@@ -126,7 +126,7 @@ local UNITS: { [string]: Types.UnitDef } = {
 		},
 	},
 	Samurai = {
-		displayName = "Samurai",
+		displayName = "Tetsu • Samurai",
 		cost = 160,
 		range = 18,
 		damage = 30,
@@ -146,7 +146,7 @@ local UNITS: { [string]: Types.UnitDef } = {
 				cooldown = 1.2,
 				splashRadius = 0,
 				evolution = {
-					displayName = "Storm Samurai",
+					displayName = "Tetsu • Storm Samurai",
 					accentColor = Color3.fromRGB(120, 200, 255),
 					ability = { kind = "Crit", description = "Every 3rd slash hits 3x harder", every = 3, multiplier = 3 },
 				},
@@ -154,7 +154,7 @@ local UNITS: { [string]: Types.UnitDef } = {
 		},
 	},
 	Mage = {
-		displayName = "Mage",
+		displayName = "Mirai • Mage",
 		cost = 260,
 		range = 24,
 		damage = 13,
@@ -174,7 +174,7 @@ local UNITS: { [string]: Types.UnitDef } = {
 				cooldown = 1.3,
 				splashRadius = 12,
 				evolution = {
-					displayName = "Frost Archmage",
+					displayName = "Mirai • Frost Archmage",
 					accentColor = Color3.fromRGB(170, 240, 255),
 					ability = { kind = "Slow", description = "Hits slow enemies by 40% for 2s", factor = 0.6, duration = 2 },
 				},
@@ -2005,13 +2005,13 @@ local EnemyService = require(script.Parent.EnemyService)
 local EconomyService = require(script.Parent.EconomyService)
 local PathService = require(script.Parent.PathService)
 local UnitMath = require(Shared:WaitForChild("Util"):WaitForChild("UnitMath"))
+local UnitModels = require(script.Parent.Parent:WaitForChild("Units"):WaitForChild("UnitModels"))
 
 local UnitService = {}
 
 local MAX_NAME_LENGTH = 16
 local RATE_PER_SECOND = 4 -- maximo de PlaceUnit/UpgradeUnit/SellUnit por segundo (cada remote tem o seu balde)
 local BURST = 4
-local PEDESTAL_HEIGHT = 0.3
 
 type Unit = {
 	id: string,
@@ -2111,216 +2111,8 @@ local function nearestRoadPoint(from: Vector3): Vector3
 	return best
 end
 
--- Peca de enfeite soldada ao Root. offset e relativo ao "baseCFrame" (o chao, ja virado).
-local function decorate(
-	model: Model,
-	root: BasePart,
-	baseCFrame: CFrame,
-	name: string,
-	shape: Enum.PartType,
-	size: Vector3,
-	color: Color3,
-	neon: boolean,
-	offset: CFrame
-)
-	local part = Instance.new("Part")
-	part.Name = name
-	part.Shape = shape
-	part.Size = size
-	part.Color = color
-	part.Material = if neon then Enum.Material.Neon else Enum.Material.SmoothPlastic
-	part.Anchored = false
-	part.Massless = true
-	part.CanCollide = false
-	part.CanTouch = false
-	part.CanQuery = false
-	part.CFrame = baseCFrame * offset
-	part.Parent = model
-	if name == "Orb" then
-		-- Orb usa Weld real: o cliente anima C0 para o bob, e WeldConstraint nao tem C0 editavel.
-		local weld = Instance.new("Weld")
-		weld.Part0 = root
-		weld.Part1 = part
-		weld.C0 = root.CFrame:ToObjectSpace(part.CFrame)
-		weld.C1 = CFrame.new()
-		weld.Parent = part
-	else
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = root
-		weld.Part1 = part
-		weld.Parent = part
-	end
-end
-
--- Disco achatado (cilindro deitado para ficar "em pe" no eixo Y).
-local FLAT = CFrame.Angles(0, 0, math.pi / 2)
-
--- Monta o visual low-poly. baseCFrame fica no chao (topo do slot), olhando para a estrada.
--- O Root e um pedestal fino no chao; corpo, cabeca e acessorios sao soldados nele.
-local function buildModel(
-	id: string,
-	kind: string,
-	def: Types.UnitDef,
-	baseCFrame: CFrame
-): (Model, BasePart)
-	local model = Instance.new("Model")
-	model.Name = id
-
-	local root = Instance.new("Part")
-	root.Name = "Root"
-	root.Shape = Enum.PartType.Cylinder
-	root.Size = Vector3.new(PEDESTAL_HEIGHT, 3.2, 3.2)
-	root.Color = def.accentColor
-	root.Material = Enum.Material.Neon
-	root.Anchored = true
-	root.CanCollide = false
-	root.CanQuery = false
-	root.CanTouch = false
-	root.CFrame = baseCFrame * CFrame.new(0, PEDESTAL_HEIGHT / 2, 0) * FLAT
-	root.Parent = model
-	model.PrimaryPart = root
-
-	-- Hitbox invisivel: e a UNICA peca com CanQuery, o cliente faz raycast nela para selecionar.
-	local hitbox = Instance.new("Part")
-	hitbox.Name = "Hitbox"
-	hitbox.Size = Vector3.new(3.2, def.height + 0.6, 3.2)
-	hitbox.Transparency = 1
-	hitbox.Anchored = false
-	hitbox.Massless = true
-	hitbox.CanCollide = false
-	hitbox.CanTouch = false
-	hitbox.CanQuery = true
-	hitbox.CFrame = baseCFrame * CFrame.new(0, (def.height + 0.6) / 2, 0)
-	hitbox.Parent = model
-	local hitboxWeld = Instance.new("WeldConstraint")
-	hitboxWeld.Part0 = root
-	hitboxWeld.Part1 = hitbox
-	hitboxWeld.Parent = hitbox
-
-	local h = def.height
-	local bodyH = h * 0.45
-	local headD = h * 0.28
-	local bodyY = PEDESTAL_HEIGHT + bodyH / 2
-	local headY = PEDESTAL_HEIGHT + bodyH + headD * 0.45
-	local headTop = headY + headD / 2
-	local ball = Enum.PartType.Ball
-	local block = Enum.PartType.Block
-	local cyl = Enum.PartType.Cylinder
-
-	-- Corpo e cabeca (iguais para todos; so a cor muda).
-	decorate(
-		model,
-		root,
-		baseCFrame,
-		"Body",
-		block,
-		Vector3.new(2.1, bodyH, 1.5),
-		def.color,
-		false,
-		CFrame.new(0, bodyY, 0)
-	)
-	decorate(
-		model,
-		root,
-		baseCFrame,
-		"Head",
-		ball,
-		Vector3.new(headD, headD, headD),
-		def.color,
-		false,
-		CFrame.new(0, headY, 0)
-	)
-
-	if kind == "Ninja" then
-		-- Faixa neon na cabeca + cachecol neon com ponta solta atras (+Z = costas).
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"Headband",
-			block,
-			Vector3.new(headD * 1.06, 0.25, headD * 1.06),
-			def.accentColor,
-			true,
-			CFrame.new(0, headY + headD * 0.1, 0)
-		)
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"Scarf",
-			block,
-			Vector3.new(1.7, 0.35, 1.7),
-			def.accentColor,
-			true,
-			CFrame.new(0, PEDESTAL_HEIGHT + bodyH + 0.05, 0)
-		)
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"ScarfTail",
-			block,
-			Vector3.new(0.4, 0.2, 1.4),
-			def.accentColor,
-			true,
-			CFrame.new(0.5, PEDESTAL_HEIGHT + bodyH, 1.2) * CFrame.Angles(0.5, 0, 0)
-		)
-	elseif kind == "Samurai" then
-		-- Chapeu largo (disco) + katana neon ao lado.
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"Hat",
-			cyl,
-			Vector3.new(0.4, headD * 2.3, headD * 2.3),
-			def.color:Lerp(Color3.new(0, 0, 0), 0.35),
-			false,
-			CFrame.new(0, headTop - 0.05, 0) * FLAT
-		)
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"Katana",
-			block,
-			Vector3.new(0.18, h * 0.75, 0.18),
-			def.accentColor,
-			true,
-			CFrame.new(1.5, PEDESTAL_HEIGHT + bodyH * 0.8, -0.2) * CFrame.Angles(0, 0, -0.25)
-		)
-	elseif kind == "Mage" then
-		-- Chapeu "cone" feito de 3 discos que diminuem + orbe neon flutuando.
-		local widths = { headD * 1.9, headD * 1.4, headD * 0.8 }
-		for i, width in widths do
-			decorate(
-				model,
-				root,
-				baseCFrame,
-				"HatPart" .. tostring(i),
-				cyl,
-				Vector3.new(0.45, width, width),
-				def.color:Lerp(Color3.new(0, 0, 0), 0.25),
-				false,
-				CFrame.new(0, headTop + (i - 1) * 0.42, 0) * FLAT
-			)
-		end
-		decorate(
-			model,
-			root,
-			baseCFrame,
-			"Orb",
-			ball,
-			Vector3.new(1.1, 1.1, 1.1),
-			def.accentColor,
-			true,
-			CFrame.new(1.6, PEDESTAL_HEIGHT + bodyH + 0.6, 0)
-		)
-	end
-
-	return model, root
-end
+-- O visual (modelo chibi de cada personagem) mora em src/server/Units/UnitModels.luau.
+-- Aqui so pedimos para montar: mesmo contrato de antes (Root, Hitbox, frente = -Z).
 
 local function matchStateName(): string?
 	local folder = ReplicatedStorage:FindFirstChild("MatchState")
@@ -2433,7 +2225,7 @@ local function onPlaceUnit(player: Player, kind: unknown, slotName: unknown)
 		baseCFrame = CFrame.lookAt(ground, lookTarget)
 	end
 
-	local model, root = buildModel(id, kind, def, baseCFrame)
+	local model, root = UnitModels.build(id, kind, UnitModels.lookFor(kind, def), baseCFrame)
 	-- Atributos ANTES de parentar: o cliente ja ve tudo certo quando o modelo aparece.
 	model:SetAttribute("Id", id)
 	model:SetAttribute("Kind", kind)
@@ -2528,6 +2320,8 @@ local function onUpgradeUnit(player: Player, id: unknown, fromLevel: unknown)
 	unit.spent += cost
 	unit.model:SetAttribute("Level", unit.level)
 	unit.model:SetAttribute("Spent", unit.spent)
+	-- No nivel maximo aparecem as pecas de evolucao (capa, chifres, coroa...).
+	UnitModels.setLevel(unit.model, unit.level, Config.MAX_UNIT_LEVEL)
 	if upgradedRemote then
 		upgradedRemote:FireAllClients(unit.id, unit.level, unit.position)
 	end
@@ -2833,18 +2627,1462 @@ return UnitService
 ]]></ProtectedString>
 					</Properties>
 				</Item>
+				<Item class="ModuleScript" referent="RBX00000016">
+					<Properties>
+						<string name="Name">WorldService</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- WorldService: liga o "Neon District" quando o servidor comeca.
+-- A logica toda mora em src/server/World/ (WorldBuilder e amigos).
+-- init() nao faz nada (regra: init rapido, sem trabalho pesado);
+-- start() monta o mundo uma vez.
+
+local WorldBuilder = require(script.Parent.Parent:WaitForChild("World"):WaitForChild("WorldBuilder"))
+
+local WorldService = {}
+
+function WorldService.init() end
+
+function WorldService.start()
+	local ok, err = pcall(WorldBuilder.build)
+	if not ok then
+		-- Decoracao quebrada nunca pode derrubar a partida: so avisa.
+		warn(`[World] falhou ao montar o mundo: {err}`)
+	end
+end
+
+return WorldService
+]]></ProtectedString>
+					</Properties>
+				</Item>
+			</Item>
+			<Item class="Folder" referent="RBX00000017">
+				<Properties>
+					<string name="Name">Units</string>
+				</Properties>
+				<Item class="ModuleScript" referent="RBX00000018">
+					<Properties>
+						<string name="Name">UnitModels</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- Modelos chibi low-poly dos personagens (docs/DESIGN-PERSONAGENS.md).
+--
+-- Contrato (o cliente depende disto, nao quebre):
+--   * model.Name = id; PrimaryPart = "Root" (pedestal neon ancorado).
+--   * "Hitbox" e a UNICA peca com CanQuery (o painel faz raycast nela).
+--   * Frente = -Z do baseCFrame (o servidor ja vira o baseCFrame para a estrada).
+--   * Pecas de destaque usam Material.Neon com a cor de acento do Config:
+--     o UnitFxController acha essas pecas e muda a cor delas por nivel.
+--   * A bola magica do Mage se chama "Orb" e usa Weld (nao WeldConstraint):
+--     o cliente anima o C0 dela para ela flutuar.
+--   * Pecas de EVOLUCAO ja vem no modelo, invisiveis (atributo EvoPart).
+--     setLevel(model, 4) mostra elas.
+-- Cada personagem tem no maximo ~20 pecas e nenhuma luz (podem existir 24 na tela).
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Types = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Types"))
+
+local UnitModels = {}
+
+local PEDESTAL_HEIGHT = 0.3
+local FLAT = CFrame.Angles(0, 0, math.pi / 2) -- cilindro "deitado" vira disco em pe no Y
+local SKIN = Color3.fromRGB(255, 221, 196)
+local EYE = Color3.fromRGB(28, 26, 40)
+
+-- Tudo que o visual precisa de um personagem.
+export type Look = {
+	height: number,
+	body: Color3, -- roupa principal (cor MEDIA/CLARA: o mundo e noturno)
+	secondary: Color3, -- detalhe da roupa (chapeu, armadura, cabelo)
+	accent: Color3, -- neon (o cliente procura essa cor)
+	evoAccent: Color3, -- neon da evolucao (nivel 4)
+}
+
+-- Visual de cada personagem. Os 3 iniciais pegam altura e neon do Config (lookFor).
+-- Os 4 novos (gacha da S7) ainda nao estao no Config, entao tudo vem daqui.
+UnitModels.LOOKS = {
+	Ninja = { height = 5, body = Color3.fromRGB(70, 88, 150), secondary = Color3.fromRGB(40, 48, 84), accent = Color3.fromRGB(60, 220, 255), evoAccent = Color3.fromRGB(170, 80, 255) },
+	Samurai = { height = 5.6, body = Color3.fromRGB(205, 60, 64), secondary = Color3.fromRGB(226, 192, 122), accent = Color3.fromRGB(255, 200, 60), evoAccent = Color3.fromRGB(120, 200, 255) },
+	Mage = { height = 5.4, body = Color3.fromRGB(150, 112, 214), secondary = Color3.fromRGB(96, 66, 168), accent = Color3.fromRGB(230, 90, 255), evoAccent = Color3.fromRGB(170, 240, 255) },
+	Archer = { height = 5.2, body = Color3.fromRGB(232, 232, 242), secondary = Color3.fromRGB(70, 80, 110), accent = Color3.fromRGB(255, 220, 50), evoAccent = Color3.fromRGB(255, 140, 60) },
+	Brawler = { height = 5.2, body = Color3.fromRGB(240, 136, 52), secondary = Color3.fromRGB(60, 50, 50), accent = Color3.fromRGB(170, 255, 60), evoAccent = Color3.fromRGB(255, 245, 120) },
+	Fox = { height = 5, body = Color3.fromRGB(246, 240, 246), secondary = Color3.fromRGB(255, 196, 150), accent = Color3.fromRGB(255, 110, 180), evoAccent = Color3.fromRGB(140, 200, 255) },
+	Mecha = { height = 6.5, body = Color3.fromRGB(150, 156, 172), secondary = Color3.fromRGB(80, 86, 102), accent = Color3.fromRGB(40, 230, 255), evoAccent = Color3.fromRGB(255, 80, 120) },
+} :: { [string]: Look }
+
+-- Nome proprio de cada personagem (aparece como "Nome • Classe").
+UnitModels.NAMES = {
+	Ninja = "Sumi",
+	Samurai = "Tetsu",
+	Mage = "Mirai",
+	Archer = "Hoshi",
+	Brawler = "Jiro",
+	Fox = "Kohana",
+	Mecha = "Volt",
+} :: { [string]: string }
+
+-- Junta o visual daqui com os numeros oficiais do Config (altura e neon).
+function UnitModels.lookFor(kind: string, def: Types.UnitDef?): Look
+	local base = UnitModels.LOOKS[kind] or UnitModels.LOOKS.Ninja
+	if not def then
+		return base
+	end
+	local evo = base.evoAccent
+	local last = def.upgrades[#def.upgrades]
+	if last and last.evolution then
+		evo = last.evolution.accentColor
+	end
+	return {
+		height = def.height,
+		body = base.body,
+		secondary = base.secondary,
+		accent = def.accentColor,
+		evoAccent = evo,
+	}
+end
+
+-- ---------------------------------------------------------------------------
+-- Montagem
+-- ---------------------------------------------------------------------------
+
+type Ctx = {
+	model: Model,
+	root: BasePart,
+	base: CFrame,
+	look: Look,
+	-- medidas do corpo (calculadas em buildBody)
+	torsoY: number,
+	torsoH: number,
+	torsoW: number,
+	headY: number,
+	headD: number,
+	headTop: number,
+	handY: number,
+	armX: number,
+}
+
+type AddOptions = {
+	neon: boolean?,
+	evo: boolean?, -- peca de evolucao: comeca invisivel
+	material: Enum.Material?,
+	shadow: boolean?,
+	realWeld: boolean?, -- Weld com C0 (so o Orb)
+	transparency: number?,
+}
+
+-- Cria uma peca soldada ao Root. offset e relativo ao chao do personagem (baseCFrame).
+local function add(ctx: Ctx, name: string, shape: Enum.PartType, size: Vector3, offset: CFrame, color: Color3, options: AddOptions?): Part
+	local opts: AddOptions = options or {}
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Shape = shape
+	part.Size = size
+	part.Color = color
+	part.Material = if opts.neon then Enum.Material.Neon else (opts.material or Enum.Material.SmoothPlastic)
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.Anchored = false
+	part.Massless = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.CastShadow = opts.shadow == true
+	local visible = opts.transparency or 0
+	if opts.evo then
+		-- Peca de evolucao nasce invisivel e SEM neon. Motivo: o UnitFxController guarda a
+		-- transparencia das pecas neon quando a unidade aparece e reaplica isso todo frame
+		-- (o brilho pulsando). Se ela nascesse neon e invisivel, ficaria invisivel para sempre.
+		-- O setLevel liga o neon e a transparencia juntos.
+		part:SetAttribute("EvoPart", true)
+		part:SetAttribute("EvoTransparency", visible)
+		part:SetAttribute("EvoNeon", opts.neon == true)
+		part.Material = opts.material or Enum.Material.SmoothPlastic
+		part.Transparency = 1
+	else
+		part.Transparency = visible
+	end
+	part.CFrame = ctx.base * offset
+	part.Parent = ctx.model
+	if opts.realWeld then
+		local weld = Instance.new("Weld")
+		weld.Part0 = ctx.root
+		weld.Part1 = part
+		weld.C0 = ctx.root.CFrame:ToObjectSpace(part.CFrame)
+		weld.Parent = part
+	else
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = ctx.root
+		weld.Part1 = part
+		weld.Parent = part
+	end
+	return part
+end
+
+local BLOCK = Enum.PartType.Block
+local BALL = Enum.PartType.Ball
+local CYL = Enum.PartType.Cylinder
+local WEDGE = Enum.PartType.Wedge
+
+local function at(x: number, y: number, z: number): CFrame
+	return CFrame.new(x, y, z)
+end
+
+-- Corpo chibi comum: 2 pernas, tronco, 2 bracos, cabeca grande, 2 olhos (7 pecas + Root/Hitbox).
+-- legs = false troca as pernas por uma saia/manto (Mage).
+local function buildBody(ctx: Ctx, legs: boolean)
+	local h = ctx.look.height
+	local legH = h * 0.17
+	local torsoH = h * 0.26
+	local torsoW = 1.4
+	local headD = h * 0.42
+	local torsoY = PEDESTAL_HEIGHT + legH + torsoH / 2
+	local headY = PEDESTAL_HEIGHT + legH + torsoH + headD * 0.42
+	ctx.torsoY, ctx.torsoH, ctx.torsoW = torsoY, torsoH, torsoW
+	ctx.headY, ctx.headD, ctx.headTop = headY, headD, headY + headD / 2
+	ctx.armX = torsoW / 2 + 0.24
+	ctx.handY = torsoY - torsoH * 0.45
+
+	local look = ctx.look
+	if legs then
+		for _, side in { -1, 1 } do
+			add(ctx, if side < 0 then "LegL" else "LegR", BLOCK, Vector3.new(0.5, legH, 0.55), at(side * 0.32, PEDESTAL_HEIGHT + legH / 2, 0), look.secondary)
+		end
+	else
+		add(ctx, "Robe", BLOCK, Vector3.new(1.7, legH + 0.1, 1.2), at(0, PEDESTAL_HEIGHT + legH / 2 + 0.05, 0), look.secondary)
+	end
+	add(ctx, "Body", BLOCK, Vector3.new(torsoW, torsoH, 0.95), at(0, torsoY, 0), look.body, { shadow = true })
+	for _, side in { -1, 1 } do
+		add(ctx, if side < 0 then "ArmL" else "ArmR", BLOCK, Vector3.new(0.42, torsoH * 0.95, 0.45), at(side * ctx.armX, torsoY - 0.05, 0), look.body)
+	end
+	add(ctx, "Head", BALL, Vector3.new(headD, headD, headD), at(0, headY, 0), SKIN, { shadow = true })
+	for _, side in { -1, 1 } do
+		add(ctx, if side < 0 then "EyeL" else "EyeR", BLOCK, Vector3.new(0.18, 0.3, 0.08), at(side * headD * 0.18, headY + headD * 0.02, -headD * 0.47), EYE)
+	end
+end
+
+-- ---------------------------------------------------------------------------
+-- Personagens
+-- ---------------------------------------------------------------------------
+
+-- Sumi • Ninja: mascara, faixa e cachecol neon com ponta voando, shurikens nas costas.
+local function ninja(ctx: Ctx)
+	buildBody(ctx, true)
+	local l, d, y = ctx.look, ctx.headD, ctx.headY
+	add(ctx, "Mask", BLOCK, Vector3.new(d * 0.86, d * 0.26, d * 0.5), at(0, y - d * 0.2, -d * 0.22), l.secondary)
+	add(ctx, "Headband", BLOCK, Vector3.new(d * 1.04, 0.22, d * 1.04), at(0, y + d * 0.16, 0), l.accent, { neon = true })
+	local neck = ctx.torsoY + ctx.torsoH / 2
+	add(ctx, "Scarf", BLOCK, Vector3.new(1.6, 0.32, 1.15), at(0, neck, 0), l.accent, { neon = true })
+	add(ctx, "ScarfTail1", BLOCK, Vector3.new(0.4, 0.18, 1.3), at(0.4, neck - 0.05, 1.05) * CFrame.Angles(0.35, 0.2, 0), l.accent, { neon = true })
+	add(ctx, "ScarfTail2", BLOCK, Vector3.new(0.34, 0.16, 1.1), at(0.6, neck - 0.35, 2.0) * CFrame.Angles(0.6, 0.35, 0.1), l.accent, { neon = true })
+	for i, x in { -0.35, 0.35 } do
+		add(ctx, `Shuriken{i}`, BLOCK, Vector3.new(0.5, 0.5, 0.08), at(x, ctx.torsoY + 0.15, 0.52) * CFrame.Angles(0, 0, math.rad(45)), l.secondary, { material = Enum.Material.Metal })
+	end
+	-- Evolucao (Shadow Ninja): capa rasgada + segunda lamina na mao.
+	add(ctx, "EvoCape", WEDGE, Vector3.new(1.5, ctx.torsoH + 0.9, 0.35), at(0, ctx.torsoY - 0.35, 0.62) * CFrame.Angles(0, math.pi, 0), l.evoAccent:Lerp(Color3.new(0, 0, 0), 0.55), { evo = true })
+	add(ctx, "EvoBlade", BLOCK, Vector3.new(0.14, 0.14, 1.8), at(ctx.armX, ctx.handY, -0.7), l.evoAccent, { evo = true, neon = true })
+end
+
+-- Tetsu • Samurai: chapeu largo de palha, ombreiras, katana neon na cintura.
+local function samurai(ctx: Ctx)
+	buildBody(ctx, true)
+	local l, d = ctx.look, ctx.headD
+	add(ctx, "HatBrim", CYL, Vector3.new(0.22, d * 2.1, d * 2.1), at(0, ctx.headTop - 0.12, 0) * FLAT, l.secondary, { shadow = true })
+	add(ctx, "HatTop", CYL, Vector3.new(0.4, d * 0.9, d * 0.9), at(0, ctx.headTop + 0.15, 0) * FLAT, l.secondary)
+	local shoulderY = ctx.torsoY + ctx.torsoH * 0.38
+	for _, side in { -1, 1 } do
+		add(ctx, if side < 0 then "PadL" else "PadR", BLOCK, Vector3.new(0.75, 0.32, 0.85), at(side * (ctx.armX + 0.08), shoulderY, 0) * CFrame.Angles(0, 0, -side * 0.3), l.body:Lerp(Color3.new(0, 0, 0), 0.25))
+	end
+	add(ctx, "Belt", BLOCK, Vector3.new(ctx.torsoW + 0.05, 0.22, 1.0), at(0, ctx.torsoY - ctx.torsoH * 0.3, 0), l.secondary)
+	add(ctx, "Katana", BLOCK, Vector3.new(0.14, 0.14, 2.6), at(-0.85, ctx.torsoY - ctx.torsoH * 0.3, 0.2) * CFrame.Angles(0.35, 0, 0), l.accent, { neon = true })
+	add(ctx, "Hilt", BLOCK, Vector3.new(0.18, 0.18, 0.6), at(-0.85, ctx.torsoY - ctx.torsoH * 0.3 + 0.55, -1.25) * CFrame.Angles(0.35, 0, 0), Color3.fromRGB(40, 30, 30))
+	-- Evolucao (Storm Samurai): chifres de raio no chapeu + segunda katana nas costas.
+	for _, side in { -1, 1 } do
+		add(ctx, if side < 0 then "EvoHornL" else "EvoHornR", WEDGE, Vector3.new(0.2, 1.1, 0.5), at(side * 0.45, ctx.headTop + 0.75, -0.2) * CFrame.Angles(0, 0, -side * 0.35), l.evoAccent, { evo = true, neon = true })
+	end
+	add(ctx, "EvoKatana", BLOCK, Vector3.new(0.14, 2.6, 0.14), at(0.3, ctx.torsoY + 0.3, 0.58) * CFrame.Angles(0, 0, 0.6), l.evoAccent, { evo = true, neon = true })
+end
+
+-- Mirai • Mage: manto, chapeu conico torto, cajado com Orb (o cliente faz o Orb flutuar).
+local function mage(ctx: Ctx)
+	buildBody(ctx, false)
+	local l, d = ctx.look, ctx.headD
+	local widths = { d * 1.9, d * 1.25, d * 0.7 }
+	for i, width in widths do
+		local tilt = CFrame.Angles(0, 0, (i - 1) * -0.12)
+		add(ctx, `Hat{i}`, CYL, Vector3.new(0.5, width, width), at((i - 1) * 0.12, ctx.headTop - 0.1 + (i - 1) * 0.5, 0) * tilt * FLAT, l.secondary)
+	end
+	add(ctx, "HatBand", CYL, Vector3.new(0.14, d * 1.3, d * 1.3), at(0, ctx.headTop + 0.18, 0) * FLAT, l.accent, { neon = true })
+	local staffX = ctx.armX + 0.25
+	add(ctx, "Staff", BLOCK, Vector3.new(0.18, 4.2, 0.18), at(staffX, PEDESTAL_HEIGHT + 2.1, -0.35), Color3.fromRGB(110, 70, 50), { material = Enum.Material.Wood })
+	add(ctx, "Orb", BALL, Vector3.new(1, 1, 1), at(staffX, PEDESTAL_HEIGHT + 4.7, -0.35), l.accent, { neon = true, realWeld = true })
+	-- Evolucao (Frost Archmage): coroa de 3 cristais + cristal em volta do orb.
+	for i = 1, 3 do
+		local angle = (i - 2) * 0.6
+		add(ctx, `EvoCrown{i}`, BLOCK, Vector3.new(0.3, 0.8, 0.3), at(math.sin(angle) * d * 0.5, ctx.headTop + 0.25, -math.cos(angle) * d * 0.5) * CFrame.Angles(0, 0, math.rad(45)), l.evoAccent, { evo = true, neon = true })
+	end
+	add(ctx, "EvoCrystal", BLOCK, Vector3.new(0.9, 0.9, 0.9), at(staffX, PEDESTAL_HEIGHT + 4.7, -0.35) * CFrame.Angles(math.rad(45), 0, math.rad(45)), l.evoAccent, { evo = true, neon = true, transparency = 0.45 })
+end
+
+-- Hoshi • Neon Archer: visor neon, rabo de cavalo alto, arco grande neon, aljava.
+local function archer(ctx: Ctx)
+	buildBody(ctx, true)
+	local l, d, y = ctx.look, ctx.headD, ctx.headY
+	add(ctx, "Hair", BALL, Vector3.new(d * 1.04, d * 0.7, d * 1.04), at(0, y + d * 0.2, 0.05), l.secondary)
+	add(ctx, "Ponytail", BLOCK, Vector3.new(0.45, 1.3, 0.45), at(0, ctx.headTop + 0.1, d * 0.45) * CFrame.Angles(-0.7, 0, 0), l.secondary)
+	add(ctx, "Visor", BLOCK, Vector3.new(d * 0.9, 0.25, 0.12), at(0, y + d * 0.04, -d * 0.48), l.accent, { neon = true })
+	-- Arco: 3 barras formando um arco na mao esquerda.
+	local bx = -(ctx.armX + 0.35)
+	local cy = ctx.torsoY
+	add(ctx, "BowMid", BLOCK, Vector3.new(0.16, 1.4, 0.16), at(bx, cy, -0.55), l.accent, { neon = true })
+	add(ctx, "BowTop", BLOCK, Vector3.new(0.16, 1.2, 0.16), at(bx, cy + 1.15, -0.3) * CFrame.Angles(0.5, 0, 0), l.accent, { neon = true })
+	add(ctx, "BowLow", BLOCK, Vector3.new(0.16, 1.2, 0.16), at(bx, cy - 1.15, -0.3) * CFrame.Angles(-0.5, 0, 0), l.accent, { neon = true })
+	add(ctx, "Quiver", CYL, Vector3.new(1.4, 0.5, 0.5), at(0.3, ctx.torsoY + 0.2, 0.55) * CFrame.Angles(0, 0, math.rad(70)), l.secondary)
+	-- Evolucao (Starfall Archer): estrela na testa + capa curta.
+	add(ctx, "EvoStar1", BLOCK, Vector3.new(0.55, 0.55, 0.1), at(0, ctx.headTop + 0.3, -d * 0.2), l.evoAccent, { evo = true, neon = true })
+	add(ctx, "EvoStar2", BLOCK, Vector3.new(0.55, 0.55, 0.1), at(0, ctx.headTop + 0.3, -d * 0.2) * CFrame.Angles(0, 0, math.rad(45)), l.evoAccent, { evo = true, neon = true })
+	add(ctx, "EvoCape", BLOCK, Vector3.new(1.3, ctx.torsoH + 0.4, 0.15), at(0, ctx.torsoY - 0.2, 0.55), l.evoAccent:Lerp(Color3.new(1, 1, 1), 0.3), { evo = true })
+end
+
+-- Jiro • Street Brawler: cabelo espetado, gola da jaqueta, luvas gigantes neon.
+local function brawler(ctx: Ctx)
+	buildBody(ctx, true)
+	local l, d = ctx.look, ctx.headD
+	for i, x in { -0.35, 0, 0.35 } do
+		add(ctx, `Spike{i}`, WEDGE, Vector3.new(0.4, 0.9, 0.7), at(x, ctx.headTop - 0.05, 0.1) * CFrame.Angles(0, math.pi, -x * 0.8), l.secondary)
+	end
+	add(ctx, "Collar", BLOCK, Vector3.new(ctx.torsoW + 0.2, 0.35, 1.05), at(0, ctx.torsoY + ctx.torsoH / 2, 0), l.body:Lerp(Color3.new(1, 1, 1), 0.2))
+	add(ctx, "Shirt", BLOCK, Vector3.new(0.5, ctx.torsoH * 0.9, 0.1), at(0, ctx.torsoY, -0.48), Color3.fromRGB(240, 240, 240))
+	for _, side in { -1, 1 } do
+		add(ctx, if side < 0 then "GloveL" else "GloveR", BLOCK, Vector3.new(0.9, 0.9, 0.9), at(side * ctx.armX, ctx.handY - 0.2, -0.1), l.accent, { neon = true })
+	end
+	add(ctx, "Bandage", BLOCK, Vector3.new(d * 1.03, 0.2, d * 1.03), at(0, ctx.headY + d * 0.22, 0), Color3.fromRGB(240, 240, 240))
+	-- Evolucao (Thunder Brawler): raios saindo dos ombros.
+	for _, side in { -1, 1 } do
+		add(ctx, if side < 0 then "EvoBoltL" else "EvoBoltR", WEDGE, Vector3.new(0.25, 1.3, 0.6), at(side * (ctx.armX + 0.2), ctx.torsoY + ctx.torsoH * 0.7, 0.1) * CFrame.Angles(0, 0, -side * 0.6), l.evoAccent, { evo = true, neon = true })
+	end
+end
+
+-- Kohana • Fox Spirit: orelhas de raposa, 3 caudas, mascara de festival na lateral.
+local function fox(ctx: Ctx)
+	buildBody(ctx, true)
+	local l, d, y = ctx.look, ctx.headD, ctx.headY
+	for _, side in { -1, 1 } do
+		add(ctx, if side < 0 then "EarL" else "EarR", WEDGE, Vector3.new(0.25, 0.9, 0.6), at(side * d * 0.3, ctx.headTop + 0.15, 0), l.body)
+		add(ctx, if side < 0 then "EarTipL" else "EarTipR", WEDGE, Vector3.new(0.27, 0.35, 0.3), at(side * d * 0.3, ctx.headTop + 0.48, -0.08), l.accent, { neon = true })
+	end
+	add(ctx, "Hair", BALL, Vector3.new(d * 1.04, d * 0.6, d * 1.04), at(0, y + d * 0.24, 0.05), l.secondary)
+	add(ctx, "FestivalMask", BALL, Vector3.new(0.75, 0.75, 0.3), at(d * 0.46, y + d * 0.1, -0.1) * CFrame.Angles(0, -1.2, 0), Color3.fromRGB(255, 255, 255))
+	add(ctx, "MaskStripe", BLOCK, Vector3.new(0.5, 0.12, 0.12), at(d * 0.5, y + d * 0.1, -0.2) * CFrame.Angles(0, -1.2, 0), l.accent, { neon = true })
+	for i, yaw in { -0.6, 0, 0.6 } do
+		add(ctx, `Tail{i}`, BALL, Vector3.new(0.7, 0.7, 2.2), at(math.sin(yaw) * 0.9, ctx.torsoY - 0.2 + math.abs(yaw) * 0.3, 0.6 + math.cos(yaw) * 0.8) * CFrame.Angles(0.5, yaw, 0), l.body)
+	end
+	-- Evolucao (Moonfire Fox): 3 fogos-fatuos em volta.
+	for i = 1, 3 do
+		local angle = i * math.pi * 2 / 3
+		add(ctx, `EvoFire{i}`, BALL, Vector3.new(0.6, 0.6, 0.6), at(math.cos(angle) * 1.6, ctx.headY, math.sin(angle) * 1.6), l.evoAccent, { evo = true, neon = true })
+	end
+end
+
+-- Volt • Mecha Pilot: mini-mecha (sem o corpo chibi): pernas grossas, cabine de vidro com o
+-- piloto dentro e canhoes nos ombros.
+local function mecha(ctx: Ctx)
+	local l, h = ctx.look, ctx.look.height
+	local legH = h * 0.25
+	local bodyH = h * 0.38
+	local bodyY = PEDESTAL_HEIGHT + legH + bodyH / 2
+	ctx.torsoY, ctx.torsoH, ctx.torsoW = bodyY, bodyH, 2.6
+	ctx.headD = 1.3
+	ctx.headY = bodyY + bodyH / 2 + 0.55
+	ctx.headTop = ctx.headY + 0.65
+	for _, side in { -1, 1 } do
+		add(ctx, if side < 0 then "LegL" else "LegR", BLOCK, Vector3.new(0.8, legH, 1.1), at(side * 0.75, PEDESTAL_HEIGHT + legH / 2, 0), l.secondary, { material = Enum.Material.Metal })
+		add(ctx, if side < 0 then "FootL" else "FootR", BLOCK, Vector3.new(1, 0.35, 1.5), at(side * 0.75, PEDESTAL_HEIGHT + 0.17, -0.15), l.secondary, { material = Enum.Material.Metal })
+	end
+	add(ctx, "Body", BLOCK, Vector3.new(2.6, bodyH, 1.9), at(0, bodyY, 0), l.body, { material = Enum.Material.Metal, shadow = true })
+	add(ctx, "Cockpit", BLOCK, Vector3.new(1.5, 1.3, 0.2), at(0, bodyY + 0.15, -0.95), Color3.fromRGB(120, 200, 255), { material = Enum.Material.Glass, transparency = 0.35 })
+	add(ctx, "Head", BALL, Vector3.new(1.1, 1.1, 1.1), at(0, bodyY + 0.2, -0.5), SKIN)
+	add(ctx, "PilotHelmet", BLOCK, Vector3.new(1.15, 0.3, 1.15), at(0, bodyY + 0.65, -0.5), l.accent, { neon = true })
+	add(ctx, "Antenna", BLOCK, Vector3.new(0.1, 0.9, 0.1), at(0.8, bodyY + bodyH / 2 + 0.45, 0.4), l.secondary)
+	for _, side in { -1, 1 } do
+		add(ctx, if side < 0 then "CannonL" else "CannonR", CYL, Vector3.new(1.9, 0.55, 0.55), at(side * 1.55, bodyY + bodyH / 2 + 0.2, -0.3) * CFrame.Angles(0, math.pi / 2, 0), l.secondary, { material = Enum.Material.Metal })
+		add(ctx, if side < 0 then "MuzzleL" else "MuzzleR", CYL, Vector3.new(0.2, 0.6, 0.6), at(side * 1.55, bodyY + bodyH / 2 + 0.2, -1.25) * CFrame.Angles(0, math.pi / 2, 0), l.accent, { neon = true })
+	end
+	-- Evolucao (Giga Mech): casulos de missil nas costas.
+	for _, side in { -1, 1 } do
+		add(ctx, if side < 0 then "EvoPodL" else "EvoPodR", BLOCK, Vector3.new(0.8, 1.2, 0.9), at(side * 0.6, bodyY + bodyH / 2 + 0.5, 0.75), l.evoAccent, { evo = true, neon = true })
+	end
+end
+
+local BUILDERS: { [string]: (Ctx) -> () } = {
+	Ninja = ninja,
+	Samurai = samurai,
+	Mage = mage,
+	Archer = archer,
+	Brawler = brawler,
+	Fox = fox,
+	Mecha = mecha,
+}
+
+-- Monta o modelo. baseCFrame fica no chao (topo do slot), olhando para a estrada.
+function UnitModels.build(id: string, kind: string, look: Look, baseCFrame: CFrame): (Model, BasePart)
+	local model = Instance.new("Model")
+	model.Name = id
+
+	local root = Instance.new("Part")
+	root.Name = "Root"
+	root.Shape = CYL
+	root.Size = Vector3.new(PEDESTAL_HEIGHT, 3.2, 3.2)
+	root.Color = look.accent
+	root.Material = Enum.Material.Neon
+	root.Anchored = true
+	root.CanCollide = false
+	root.CanQuery = false
+	root.CanTouch = false
+	root.CFrame = baseCFrame * CFrame.new(0, PEDESTAL_HEIGHT / 2, 0) * FLAT
+	root.Parent = model
+	model.PrimaryPart = root
+
+	-- Hitbox invisivel: a UNICA peca com CanQuery (o cliente faz raycast nela).
+	local hitbox = Instance.new("Part")
+	hitbox.Name = "Hitbox"
+	hitbox.Size = Vector3.new(3.2, look.height + 0.6, 3.2)
+	hitbox.Transparency = 1
+	hitbox.Anchored = false
+	hitbox.Massless = true
+	hitbox.CanCollide = false
+	hitbox.CanTouch = false
+	hitbox.CanQuery = true
+	hitbox.CFrame = baseCFrame * CFrame.new(0, (look.height + 0.6) / 2, 0)
+	hitbox.Parent = model
+	local hitboxWeld = Instance.new("WeldConstraint")
+	hitboxWeld.Part0 = root
+	hitboxWeld.Part1 = hitbox
+	hitboxWeld.Parent = hitbox
+
+	local ctx: Ctx = {
+		model = model,
+		root = root,
+		base = baseCFrame,
+		look = look,
+		torsoY = 0,
+		torsoH = 0,
+		torsoW = 0,
+		headY = 0,
+		headD = 0,
+		headTop = 0,
+		handY = 0,
+		armX = 0,
+	}
+	local builder = BUILDERS[kind] or ninja
+	builder(ctx)
+	return model, root
+end
+
+-- Mostra (nivel maximo) ou esconde as pecas de evolucao.
+function UnitModels.setLevel(model: Model, level: number, maxLevel: number)
+	local evolved = level >= maxLevel
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") and part:GetAttribute("EvoPart") == true then
+			local visible = part:GetAttribute("EvoTransparency")
+			part.Transparency = if evolved and typeof(visible) == "number" then visible else 1
+			if part:GetAttribute("EvoNeon") == true then
+				part.Material = if evolved then Enum.Material.Neon else Enum.Material.SmoothPlastic
+			end
+		end
+	end
+end
+
+return UnitModels
+]]></ProtectedString>
+					</Properties>
+				</Item>
+			</Item>
+			<Item class="Folder" referent="RBX00000019">
+				<Properties>
+					<string name="Name">World</string>
+				</Properties>
+				<Item class="ModuleScript" referent="RBX0000001A">
+					<Properties>
+						<string name="Name">WorldBuilder</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- Monta o "Neon District" inteiro: clima, rua, cidade e objetos.
+-- Le o Workspace.Map (que o gen_map.py gera) e cria Workspace.World so com
+-- decoracao. Nada aqui muda a jogabilidade: slots, estrada e waypoints continuam
+-- iguais, so ganham cor.
+--
+-- Pode rodar de novo quantas vezes quiser: apaga o World antigo e refaz igual
+-- (mesma semente = mesmo resultado).
+
+local WorldKit = require(script.Parent.WorldKit)
+local WorldLighting = require(script.Parent.WorldLighting)
+local WorldStreet = require(script.Parent.WorldStreet)
+local WorldCity = require(script.Parent.WorldCity)
+local WorldProps = require(script.Parent.WorldProps)
+
+local WorldBuilder = {}
+
+function WorldBuilder.build(): Folder?
+	local map = workspace:FindFirstChild("Map")
+	if not map or not map:IsA("Model") then
+		warn("[World] Workspace.Map nao encontrado; decoracao cancelada")
+		return nil
+	end
+	local info = WorldKit.readMap(map)
+	if not info then
+		return nil
+	end
+
+	local old = workspace:FindFirstChild("World")
+	if old then
+		old:Destroy()
+	end
+
+	WorldLighting.apply()
+	-- Cada parte tem a propria semente: mudar uma nao bagunca as outras.
+	WorldCity.restyleMap(info, Random.new(WorldKit.SEED))
+
+	-- Monta tudo FORA do Workspace e so no fim coloca la dentro (uma replicacao so).
+	local root = Instance.new("Folder")
+	root.Name = "World"
+	WorldStreet.build(info, WorldKit.folder("Street", root))
+	WorldCity.build(info, Random.new(WorldKit.SEED + 1), WorldKit.folder("City", root))
+	WorldProps.build(info, Random.new(WorldKit.SEED + 2), WorldKit.folder("Props", root))
+	root.Parent = workspace
+	return root
+end
+
+return WorldBuilder
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX0000001B">
+					<Properties>
+						<string name="Name">WorldCity</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- A cidade: pinta o mapa de "noite", poe faixas de janela acesas e letreiros
+-- nos predios, cria o horizonte de arranha-ceus em volta e o canal de agua.
+-- Assim o mapa para de "flutuar no ceu" e parece um bairro de Toquio neon.
+
+local WorldKit = require(script.Parent.WorldKit)
+
+type MapInfo = WorldKit.MapInfo
+
+local Colors = WorldKit.Colors
+local ACCENTS = WorldKit.ACCENTS
+
+local WorldCity = {}
+
+-- Palavras dos letreiros (inventadas, nenhuma marca real).
+local ROOF_WORDS = { "BURST", "RAMEN", "ARCADE", "KARAOKE", "NEON 24", "HOTEL" }
+local SIDE_WORDS = { "RAMEN", "GAMES", "SUSHI", "MANGA", "CAFE" }
+
+local BAND_STEP = 5 -- uma faixa de janelas a cada 5 studs de altura
+local CANAL_WIDTH = 16
+local CITY_EDGE = 350 -- ate onde vai o chao da cidade em volta
+local SKYLINE_TOWERS = 70
+
+-- Pinta as pecas do MAPA (so cor/material; posicao e tamanho nao mudam).
+function WorldCity.restyleMap(info: MapInfo, rng: Random)
+	local ground = info.map:FindFirstChild("Ground")
+	if ground and ground:IsA("BasePart") then
+		ground.Color = Colors.night
+	end
+	local road = info.map:FindFirstChild("Road")
+	if road then
+		for _, p in road:GetChildren() do
+			if p:IsA("BasePart") then
+				p.Color = Colors.asphalt
+			end
+		end
+	end
+	for _, building in info.buildings do
+		local shade = rng:NextInteger(26, 44)
+		building.Color = Color3.fromRGB(shade, shade - 4, shade + 14)
+	end
+end
+
+-- Texto neon numa face de uma peca (SurfaceGui na frente).
+local function addText(board: BasePart, text: string, color: Color3)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0 -- o texto "acende" sozinho, mesmo a noite
+	gui.Brightness = 1.6
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextScaled = true
+	label.Font = Enum.Font.GothamBlack
+	label.TextColor3 = color
+	label.Parent = gui
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Colors.white
+	stroke.Thickness = 1.5
+	stroke.Transparency = 0.5
+	stroke.Parent = label
+	gui.Parent = board
+end
+
+-- Placa com moldura neon atras. A FRENTE da placa olha para "facing".
+local function sign(name: string, center: Vector3, facing: Vector3, size: Vector3, text: string, color: Color3, parent: Instance)
+	local model = Instance.new("Model")
+	model.Name = name
+	local cf = CFrame.lookAt(center, center + facing)
+	WorldKit.part("Frame", size + Vector3.new(0.6, 0.6, -size.Z / 2), cf * CFrame.new(0, 0, size.Z * 0.6), color, model, { material = Enum.Material.Neon })
+	local board = WorldKit.part("Board", size, cf, Color3.fromRGB(10, 10, 16), model)
+	addText(board, text, color)
+	model.Parent = parent
+end
+
+-- Contorno neon (4 barras finas) em volta do topo de um bloco.
+-- So o contorno, nao a tampa inteira: vista de cima, tampa cheia vira um quadrado
+-- de luz que ofusca o resto.
+local function roofOutline(name: string, center: Vector3, sx: number, sz: number, color: Color3, parent: Instance)
+	local t = 0.5
+	local options = { material = Enum.Material.Neon }
+	WorldKit.part(`{name}_N`, Vector3.new(sx + t, t, t), CFrame.new(center + Vector3.new(0, 0, sz / 2)), color, parent, options)
+	WorldKit.part(`{name}_S`, Vector3.new(sx + t, t, t), CFrame.new(center - Vector3.new(0, 0, sz / 2)), color, parent, options)
+	WorldKit.part(`{name}_E`, Vector3.new(t, t, sz + t), CFrame.new(center + Vector3.new(sx / 2, 0, 0)), color, parent, options)
+	WorldKit.part(`{name}_W`, Vector3.new(t, t, sz + t), CFrame.new(center - Vector3.new(sx / 2, 0, 0)), color, parent, options)
+end
+
+-- Faixas de janelas + borda neon no topo de cada predio do mapa.
+local function dressBuildings(info: MapInfo, rng: Random, parent: Instance)
+	for index, building in info.buildings do
+		local accent = ACCENTS[rng:NextInteger(1, #ACCENTS)]
+		local size = building.Size
+		local bottom = building.Position.Y - size.Y / 2
+		local top = bottom + size.Y
+		local center = Vector3.new(building.Position.X, 0, building.Position.Z)
+		local y = bottom + 4
+		while y < top - 3 do
+			-- Nem todo andar acende: fica com cara de "janelas" e gasta menos pecas.
+			if rng:NextNumber() < 0.6 then
+				WorldKit.part(`Band_{index}_{math.floor(y)}`, Vector3.new(size.X + 0.25, 0.5, size.Z + 0.25), CFrame.new(center + Vector3.new(0, y, 0)), WorldKit.dim(accent, 0.45), parent, {
+					material = Enum.Material.Neon,
+				})
+			end
+			y += BAND_STEP
+		end
+		roofOutline(`Roof_{index}`, center + Vector3.new(0, top, 0), size.X, size.Z, accent, parent)
+	end
+end
+
+-- Letreiros: placas no telhado dos predios mais altos e placas verticais
+-- penduradas na lateral dos medios (bem "rua de Toquio").
+local function buildSigns(info: MapInfo, rng: Random, parent: Instance)
+	local sorted = table.clone(info.buildings)
+	table.sort(sorted, function(a, b)
+		return a.Size.Y > b.Size.Y
+	end)
+	for i = 1, math.min(#ROOF_WORDS, #sorted) do
+		local building = sorted[i]
+		local top = building.Position.Y + building.Size.Y / 2
+		local width = math.min(building.Size.X, building.Size.Z) * 0.9
+		local center = Vector3.new(building.Position.X, top + 2.8, building.Position.Z)
+		local toMiddle = Vector3.new(-center.X, 0, -center.Z)
+		local facing = if toMiddle.Magnitude > 1 then toMiddle.Unit else Vector3.new(0, 0, 1)
+		sign(`RoofSign_{i}`, center, facing, Vector3.new(width, 4.5, 0.5), ROOF_WORDS[i], ACCENTS[(i - 1) % #ACCENTS + 1], parent)
+	end
+	local sideIndex = 0
+	for i = #ROOF_WORDS + 1, #sorted do
+		local building = sorted[i]
+		if sideIndex >= #SIDE_WORDS or building.Size.Y < 16 then
+			continue
+		end
+		sideIndex += 1
+		-- Lado do predio que olha para o centro do mapa.
+		local pos = building.Position
+		local normal = if math.abs(pos.X) > math.abs(pos.Z)
+			then Vector3.new(-math.sign(pos.X), 0, 0)
+			else Vector3.new(0, 0, -math.sign(pos.Z))
+		local halfDepth = math.abs(normal.X) * building.Size.X / 2 + math.abs(normal.Z) * building.Size.Z / 2
+		local along = Vector3.new(normal.Z, 0, -normal.X)
+		local halfWidth = math.abs(along.X) * building.Size.X / 2 + math.abs(along.Z) * building.Size.Z / 2
+		local height = 11
+		local bottom = pos.Y - building.Size.Y / 2
+		local centerY = math.min(bottom + building.Size.Y - height / 2 - 2, bottom + 14)
+		local center = Vector3.new(pos.X, centerY, pos.Z) + normal * (halfDepth + 1.2) + along * (halfWidth - 1.6)
+		local word = SIDE_WORDS[sideIndex]
+		-- Uma letra por linha: "RAMEN" vira "R\nA\nM\nE\nN".
+		local letters: { string } = {}
+		for letter in string.gmatch(word, ".") do
+			table.insert(letters, letter)
+		end
+		local vertical = table.concat(letters, "\n")
+		sign(`SideSign_{sideIndex}`, center, normal, Vector3.new(2.4, height, 0.4), vertical, ACCENTS[rng:NextInteger(1, #ACCENTS)], parent)
+	end
+end
+
+-- Chao da cidade em volta + canal de agua entre o mapa e a cidade.
+local function buildSurroundings(info: MapInfo, parent: Instance)
+	local inner = info.groundHalf + CANAL_WIDTH -- onde a cidade comeca
+	local depth = CITY_EDGE - inner
+	local mid = (inner + CITY_EDGE) / 2
+	local slabY = -0.5 - 1.25 -- topo na altura da calcada (y = -0.5)
+	local floorColor = Color3.fromRGB(18, 17, 26)
+	WorldKit.part("CityNorth", Vector3.new(CITY_EDGE * 2, 2.5, depth), CFrame.new(0, slabY, mid), floorColor, parent, { material = Enum.Material.Concrete })
+	WorldKit.part("CitySouth", Vector3.new(CITY_EDGE * 2, 2.5, depth), CFrame.new(0, slabY, -mid), floorColor, parent, { material = Enum.Material.Concrete })
+	WorldKit.part("CityEast", Vector3.new(depth, 2.5, inner * 2), CFrame.new(mid, slabY, 0), floorColor, parent, { material = Enum.Material.Concrete })
+	WorldKit.part("CityWest", Vector3.new(depth, 2.5, inner * 2), CFrame.new(-mid, slabY, 0), floorColor, parent, { material = Enum.Material.Concrete })
+	-- Fundo do canal.
+	WorldKit.part("CanalBed", Vector3.new(inner * 2, 1, inner * 2), CFrame.new(0, -4.5, 0), Color3.fromRGB(10, 12, 20), parent)
+
+	-- Agua de verdade (Terrain), em 4 faixas em volta do mapa.
+	local terrain = workspace.Terrain
+	local waterMid = info.groundHalf + CANAL_WIDTH / 2
+	local long = inner * 2
+	local waterY = -2.5
+	terrain:FillBlock(CFrame.new(0, waterY, waterMid), Vector3.new(long, 2, CANAL_WIDTH), Enum.Material.Water)
+	terrain:FillBlock(CFrame.new(0, waterY, -waterMid), Vector3.new(long, 2, CANAL_WIDTH), Enum.Material.Water)
+	terrain:FillBlock(CFrame.new(waterMid, waterY, 0), Vector3.new(CANAL_WIDTH, 2, long), Enum.Material.Water)
+	terrain:FillBlock(CFrame.new(-waterMid, waterY, 0), Vector3.new(CANAL_WIDTH, 2, long), Enum.Material.Water)
+
+	-- Borda neon rosa na beira do mapa (o "cais").
+	local edge = info.groundHalf
+	for i, dir in { Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1) } do
+		local along = Vector3.new(dir.Z, 0, dir.X)
+		local center = dir * edge + Vector3.new(0, 0.05, 0)
+		WorldKit.part(`Pier_{i}`, Vector3.new(0.5, 0.3, edge * 2), CFrame.lookAt(center, center + along), Colors.pink, parent, {
+			material = Enum.Material.Neon,
+		})
+	end
+end
+
+-- Arranha-ceus la longe. A neblina roxa apaga os mais distantes, dando profundidade.
+local function buildSkyline(info: MapInfo, rng: Random, parent: Instance)
+	local inner = info.groundHalf + CANAL_WIDTH + 6
+	local made = 0
+	local tries = 0
+	while made < SKYLINE_TOWERS and tries < 2000 do
+		tries += 1
+		local x = rng:NextNumber(-CITY_EDGE + 20, CITY_EDGE - 20)
+		local z = rng:NextNumber(-CITY_EDGE + 20, CITY_EDGE - 20)
+		local w, d = rng:NextInteger(14, 30), rng:NextInteger(14, 30)
+		if math.max(math.abs(x) - w / 2, math.abs(z) - d / 2) < inner then
+			continue
+		end
+		made += 1
+		-- Perto do mapa = baixo (nao tampa a camera); longe = alto (horizonte).
+		local far = math.clamp((math.max(math.abs(x), math.abs(z)) - inner) / (CITY_EDGE - inner), 0, 1)
+		local h = rng:NextInteger(20 + math.floor(far * 40), 45 + math.floor(far * 115))
+		local shade = rng:NextInteger(16, 28)
+		local center = Vector3.new(x, -0.5 + h / 2, z)
+		WorldKit.part(`Tower_{made}`, Vector3.new(w, h, d), CFrame.new(center), Color3.fromRGB(shade, shade - 2, shade + 10), parent)
+		if rng:NextNumber() < 0.55 then
+			local accent = ACCENTS[rng:NextInteger(1, #ACCENTS)]
+			roofOutline(`TowerTop_{made}`, Vector3.new(x, -0.5 + h, z), w, d, accent, parent)
+		end
+	end
+end
+
+function WorldCity.build(info: MapInfo, rng: Random, parent: Instance)
+	dressBuildings(info, rng, WorldKit.folder("BuildingLights", parent))
+	buildSigns(info, rng, WorldKit.folder("Signs", parent))
+	buildSurroundings(info, WorldKit.folder("Surroundings", parent))
+	buildSkyline(info, rng, WorldKit.folder("Skyline", parent))
+end
+
+return WorldCity
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX0000001C">
+					<Properties>
+						<string name="Name">WorldKit</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- Caixa de ferramentas do "mundo" (a decoracao em volta do jogo).
+-- Aqui ficam: as cores neon, a funcao que cria pecas "fantasma" e a leitura
+-- do mapa (estrada, slots, predios) para a decoracao nunca ficar em cima deles.
+--
+-- Por que "fantasma"? Toda peca de decoracao NAO colide, NAO entra em raycast e
+-- NAO dispara Touched. Assim ela nunca atrapalha o toque para posicionar ou
+-- selecionar unidades (esses raycasts usam filtro Include, mas melhor garantir).
+
+local WorldKit = {}
+
+-- Semente fixa: toda vez que o servidor liga, o mundo sai IGUAL.
+WorldKit.SEED = 20261122
+
+WorldKit.Colors = {
+	cyan = Color3.fromRGB(0, 229, 255),
+	pink = Color3.fromRGB(255, 61, 165),
+	purple = Color3.fromRGB(170, 90, 255),
+	yellow = Color3.fromRGB(255, 214, 64),
+	red = Color3.fromRGB(230, 40, 70),
+	warm = Color3.fromRGB(255, 196, 140),
+	white = Color3.fromRGB(235, 235, 245),
+	asphalt = Color3.fromRGB(16, 16, 22),
+	night = Color3.fromRGB(30, 28, 42),
+	metal = Color3.fromRGB(45, 45, 58),
+}
+
+-- As 4 cores de destaque que os predios/letreiros sorteiam.
+WorldKit.ACCENTS = {
+	WorldKit.Colors.cyan,
+	WorldKit.Colors.pink,
+	WorldKit.Colors.purple,
+	WorldKit.Colors.yellow,
+}
+
+-- Retangulo no chao (plano XZ): centro + tamanho.
+export type Rect = { cx: number, cz: number, sx: number, sz: number }
+
+-- Tudo o que a decoracao precisa saber do mapa.
+export type MapInfo = {
+	map: Model,
+	waypoints: { Vector3 },
+	roadWidth: number,
+	groundHalf: number,
+	roadRects: { Rect },
+	slotRects: { Rect },
+	buildings: { BasePart },
+	blockedRects: { Rect }, -- spawn do inimigo, base, spawn do jogador
+	enemySpawn: BasePart?,
+	playerBase: BasePart?,
+}
+
+export type PartOptions = {
+	material: Enum.Material?,
+	transparency: number?,
+	shape: Enum.PartType?,
+	shadow: boolean?,
+}
+
+-- Cria uma peca de decoracao ja ancorada e "fantasma".
+function WorldKit.part(
+	name: string,
+	size: Vector3,
+	cframe: CFrame,
+	color: Color3,
+	parent: Instance,
+	options: PartOptions?
+): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Size = size
+	p.CFrame = cframe
+	p.Color = color
+	p.Material = Enum.Material.SmoothPlastic
+	p.CastShadow = false
+	if options then
+		if options.material then
+			p.Material = options.material
+		end
+		if options.transparency then
+			p.Transparency = options.transparency
+		end
+		if options.shape then
+			p.Shape = options.shape
+		end
+		if options.shadow ~= nil then
+			p.CastShadow = options.shadow
+		end
+	end
+	p.Parent = parent
+	return p
+end
+
+-- Cria uma pasta filha (para organizar o Explorer).
+function WorldKit.folder(name: string, parent: Instance): Folder
+	local f = Instance.new("Folder")
+	f.Name = name
+	f.Parent = parent
+	return f
+end
+
+-- Escurece uma cor (t = 0 nada, t = 1 preto). Neon muito forte "estoura" a tela.
+function WorldKit.dim(color: Color3, t: number): Color3
+	return color:Lerp(Color3.new(0, 0, 0), t)
+end
+
+function WorldKit.rectOf(part: BasePart): Rect
+	return { cx = part.Position.X, cz = part.Position.Z, sx = part.Size.X, sz = part.Size.Z }
+end
+
+-- Distancia entre as bordas de dois retangulos (0 = encostam ou se sobrepoem).
+function WorldKit.gap(a: Rect, b: Rect): number
+	local dx = math.max(0, math.abs(a.cx - b.cx) - (a.sx + b.sx) / 2)
+	local dz = math.max(0, math.abs(a.cz - b.cz) - (a.sz + b.sz) / 2)
+	return math.max(dx, dz)
+end
+
+-- true se o retangulo fica a pelo menos "margin" de TODOS da lista.
+function WorldKit.isClear(rect: Rect, others: { Rect }, margin: number): boolean
+	for _, other in others do
+		if WorldKit.gap(rect, other) < margin then
+			return false
+		end
+	end
+	return true
+end
+
+local function partsIn(map: Model, folderName: string): { BasePart }
+	local list: { BasePart } = {}
+	local folder = map:FindFirstChild(folderName)
+	if folder then
+		for _, child in folder:GetChildren() do
+			if child:IsA("BasePart") then
+				table.insert(list, child)
+			end
+		end
+	end
+	return list
+end
+
+local function partNamed(map: Model, name: string): BasePart?
+	local found = map:FindFirstChild(name)
+	if found and found:IsA("BasePart") then
+		return found
+	end
+	return nil
+end
+
+-- Le o Workspace.Map (gerado pelo tools/gen_map.py) e monta o MapInfo.
+function WorldKit.readMap(map: Model): MapInfo?
+	-- Waypoints em ordem pelo atributo Index.
+	local indexed: { { index: number, position: Vector3 } } = {}
+	for _, wp in partsIn(map, "Waypoints") do
+		local index = wp:GetAttribute("Index")
+		if typeof(index) == "number" then
+			table.insert(indexed, { index = index, position = wp.Position })
+		end
+	end
+	if #indexed < 2 then
+		warn("[World] Map.Waypoints sem pontos suficientes; decoracao cancelada")
+		return nil
+	end
+	table.sort(indexed, function(a, b)
+		return a.index < b.index
+	end)
+	local waypoints: { Vector3 } = {}
+	for _, item in indexed do
+		table.insert(waypoints, Vector3.new(item.position.X, 0, item.position.Z))
+	end
+
+	local road = partsIn(map, "Road")
+	local roadRects: { Rect } = {}
+	local roadWidth = 12
+	for _, p in road do
+		table.insert(roadRects, WorldKit.rectOf(p))
+		if p.Name == "Joint_1" then
+			roadWidth = p.Size.X
+		end
+	end
+
+	local slotRects: { Rect } = {}
+	for _, p in partsIn(map, "Placement") do
+		table.insert(slotRects, WorldKit.rectOf(p))
+	end
+
+	local blocked: { Rect } = {}
+	local enemySpawn = partNamed(map, "EnemySpawn")
+	local playerBase = partNamed(map, "PlayerBase")
+	for _, p in { enemySpawn, playerBase, partNamed(map, "PlayerSpawn") } do
+		if p then
+			table.insert(blocked, WorldKit.rectOf(p))
+		end
+	end
+
+	local ground = partNamed(map, "Ground")
+	return {
+		map = map,
+		waypoints = waypoints,
+		roadWidth = roadWidth,
+		groundHalf = if ground then ground.Size.X / 2 else 110,
+		roadRects = roadRects,
+		slotRects = slotRects,
+		buildings = partsIn(map, "Buildings"),
+		blockedRects = blocked,
+		enemySpawn = enemySpawn,
+		playerBase = playerBase,
+	}
+end
+
+return WorldKit
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX0000001D">
+					<Properties>
+						<string name="Name">WorldLighting</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- Clima do mundo: noite em Toquio com neblina roxa e brilho no neon.
+-- O servidor muda a Lighting e isso replica para todos os jogadores.
+-- Cada efeito tem nome proprio: rodar de novo troca, nao duplica.
+
+local Lighting = game:GetService("Lighting")
+
+local WorldLighting = {}
+
+-- Apaga filhos antigos de uma classe (ex.: a Atmosphere padrao de lugar novo).
+-- Duas Atmosphere juntas = o Roblox escolhe uma "aleatoria". Melhor ter so a nossa.
+local function removeAll(className: string)
+	for _, child in Lighting:GetChildren() do
+		if child:IsA(className) then
+			child:Destroy()
+		end
+	end
+end
+
+local function removeNamed(name: string)
+	local old = Lighting:FindFirstChild(name)
+	if old then
+		old:Destroy()
+	end
+end
+
+function WorldLighting.apply()
+	-- Noite (21h), mas com luz ambiente roxa para crianca no celular ainda enxergar tudo.
+	Lighting.ClockTime = 21
+	Lighting.Brightness = 2
+	Lighting.Ambient = Color3.fromRGB(70, 55, 100)
+	Lighting.OutdoorAmbient = Color3.fromRGB(115, 95, 155)
+	Lighting.EnvironmentDiffuseScale = 0.4
+	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.ExposureCompensation = 0.25
+	Lighting.GlobalShadows = true
+	Lighting.ShadowSoftness = 0.3
+
+	removeAll("Atmosphere")
+	local atmosphere = Instance.new("Atmosphere")
+	atmosphere.Name = "WorldAtmosphere"
+	atmosphere.Density = 0.3
+	atmosphere.Offset = 0.1
+	atmosphere.Color = Color3.fromRGB(140, 100, 190)
+	atmosphere.Decay = Color3.fromRGB(60, 30, 90)
+	atmosphere.Glare = 0.3
+	atmosphere.Haze = 1.2
+	atmosphere.Parent = Lighting
+
+	removeAll("Sky")
+	local sky = Instance.new("Sky")
+	sky.Name = "WorldSky"
+	sky.StarCount = 3000
+	sky.Parent = Lighting
+
+	-- Bloom: faz o Neon "vazar" luz. Threshold alto = so o neon brilha, o resto nao.
+	removeNamed("WorldBloom")
+	local bloom = Instance.new("BloomEffect")
+	bloom.Name = "WorldBloom"
+	bloom.Intensity = 0.6
+	bloom.Size = 28
+	bloom.Threshold = 1.4
+	bloom.Parent = Lighting
+
+	-- Cores um pouco mais vivas. (O FxController tem o PROPRIO ColorCorrection para flashes.)
+	removeNamed("WorldGrade")
+	local grade = Instance.new("ColorCorrectionEffect")
+	grade.Name = "WorldGrade"
+	grade.Saturation = 0.15
+	grade.Contrast = 0.08
+	grade.Brightness = 0.02
+	grade.TintColor = Color3.fromRGB(255, 240, 255)
+	grade.Parent = Lighting
+
+	-- Agua do canal: azul escuro que reflete o neon.
+	local terrain = workspace.Terrain
+	terrain.WaterColor = Color3.fromRGB(20, 40, 80)
+	terrain.WaterTransparency = 0.3
+	terrain.WaterReflectance = 0.6
+	terrain.WaterWaveSize = 0.05
+	terrain.WaterWaveSpeed = 4
+end
+
+return WorldLighting
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX0000001E">
+					<Properties>
+						<string name="Name">WorldProps</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- Objetos pequenos que dao vida a rua: maquinas de venda, cerejeiras,
+-- lanternas e petalas caindo. Cada objeto procura um lugar LIVRE:
+-- longe da estrada, dos slots, dos predios, das bases e dos outros objetos.
+
+local WorldKit = require(script.Parent.WorldKit)
+
+type MapInfo = WorldKit.MapInfo
+type Rect = WorldKit.Rect
+
+local Colors = WorldKit.Colors
+
+local WorldProps = {}
+
+local VENDING_PAIRS = 3
+local SAKURA_TREES = 4
+local LANTERNS = 6
+local PETAL_HEIGHT = 45
+
+local SAKURA_PINK = Color3.fromRGB(255, 170, 205)
+
+-- Procura um lugar livre do tamanho pedido. Devolve o centro no chao (ou nil).
+local function findSpot(info: MapInfo, rng: Random, taken: { Rect }, sx: number, sz: number): Vector3?
+	local limit = info.groundHalf - math.max(sx, sz) - 3
+	local buildingRects: { Rect } = {}
+	for _, b in info.buildings do
+		table.insert(buildingRects, WorldKit.rectOf(b))
+	end
+	for _ = 1, 400 do
+		local rect = { cx = rng:NextNumber(-limit, limit), cz = rng:NextNumber(-limit, limit), sx = sx, sz = sz }
+		if
+			WorldKit.isClear(rect, info.roadRects, 3)
+			and WorldKit.isClear(rect, info.slotRects, 2)
+			and WorldKit.isClear(rect, buildingRects, 1.5)
+			and WorldKit.isClear(rect, info.blockedRects, 3)
+			and WorldKit.isClear(rect, taken, 2)
+		then
+			table.insert(taken, rect)
+			return Vector3.new(rect.cx, 0, rect.cz)
+		end
+	end
+	return nil
+end
+
+-- Vira o objeto para o centro do mapa (fica "de frente" para a camera).
+local function facingMiddle(ground: Vector3): CFrame
+	local toMiddle = Vector3.new(-ground.X, 0, -ground.Z)
+	if toMiddle.Magnitude < 1 then
+		return CFrame.new(ground)
+	end
+	return CFrame.lookAt(ground, ground + toMiddle.Unit)
+end
+
+-- Par de maquinas de venda: corpo colorido + painel neon na frente.
+local function buildVendingPair(index: number, origin: CFrame, parent: Instance)
+	local pair = Instance.new("Model")
+	pair.Name = `Vending_{index}`
+	local bodies = { Color3.fromRGB(235, 60, 80), Color3.fromRGB(60, 120, 235) }
+	for k, offset in { -1.7, 1.7 } do
+		local cf = origin * CFrame.new(offset, 3, 0)
+		WorldKit.part(`Body_{k}`, Vector3.new(3, 6, 2), cf, bodies[k], pair, { shadow = true })
+		WorldKit.part(`Panel_{k}`, Vector3.new(2.4, 3.2, 0.1), cf * CFrame.new(0, 0.8, -1.05), Colors.white, pair, {
+			material = Enum.Material.Neon,
+			transparency = 0.15,
+		})
+		WorldKit.part(`Slot_{k}`, Vector3.new(2, 0.6, 0.1), cf * CFrame.new(0, -2, -1.05), Colors.metal, pair)
+	end
+	pair.Parent = parent
+end
+
+-- Cerejeira low-poly: tronco + 3 bolas rosa.
+local function buildSakura(index: number, ground: Vector3, rng: Random, parent: Instance)
+	local tree = Instance.new("Model")
+	tree.Name = `Sakura_{index}`
+	WorldKit.part("Trunk", Vector3.new(1.2, 7, 1.2), CFrame.new(ground + Vector3.new(0, 3.5, 0)), Color3.fromRGB(80, 50, 45), tree, {
+		material = Enum.Material.Wood,
+		shadow = true,
+	})
+	for k, size in { 7, 6, 5 } do
+		local angle = (k / 3) * math.pi * 2 + rng:NextNumber()
+		local offset = Vector3.new(math.cos(angle) * 1.6, 7 + k * 0.6, math.sin(angle) * 1.6)
+		WorldKit.part(`Leaves_{k}`, Vector3.new(size, size, size), CFrame.new(ground + offset), SAKURA_PINK, tree, {
+			shape = Enum.PartType.Ball,
+			shadow = true,
+		})
+	end
+	tree.Parent = parent
+end
+
+-- Lanterna de papel num poste (neon vermelho, sem luz de verdade para poupar o celular).
+local function buildLantern(index: number, ground: Vector3, parent: Instance)
+	local lantern = Instance.new("Model")
+	lantern.Name = `Lantern_{index}`
+	WorldKit.part("Post", Vector3.new(0.3, 6, 0.3), CFrame.new(ground + Vector3.new(0, 3, 0)), Color3.fromRGB(60, 40, 35), lantern, {
+		material = Enum.Material.Wood,
+	})
+	-- Cylinder: o comprimento fica no eixo X; girando 90 graus no Z ele fica em pe.
+	local paperCFrame = CFrame.new(ground + Vector3.new(0, 6.8, 0)) * CFrame.Angles(0, 0, math.pi / 2)
+	WorldKit.part("Paper", Vector3.new(2.2, 1.6, 1.6), paperCFrame, Colors.red, lantern, {
+		material = Enum.Material.Neon,
+		shape = Enum.PartType.Cylinder,
+	})
+	lantern.Parent = parent
+end
+
+-- Petalas de cerejeira caindo devagar sobre o mapa inteiro.
+local function buildPetals(info: MapInfo, parent: Instance)
+	local area = info.groundHalf * 2
+	local emitterPart = WorldKit.part("PetalSky", Vector3.new(area, 1, area), CFrame.new(0, PETAL_HEIGHT, 0), SAKURA_PINK, parent, {
+		transparency = 1,
+	})
+	local petals = Instance.new("ParticleEmitter")
+	petals.Name = "Petals"
+	petals.Shape = Enum.ParticleEmitterShape.Box
+	petals.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	petals.EmissionDirection = Enum.NormalId.Bottom
+	petals.Rate = 18
+	petals.Lifetime = NumberRange.new(10, 14)
+	petals.Speed = NumberRange.new(2, 4)
+	petals.Acceleration = Vector3.new(1.2, -0.4, 0.6) -- vento leve
+	petals.Rotation = NumberRange.new(0, 360)
+	petals.RotSpeed = NumberRange.new(-90, 90)
+	petals.Size = NumberSequence.new(0.35)
+	petals.Color = ColorSequence.new(SAKURA_PINK)
+	petals.LightEmission = 0.4
+	petals.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.1, 0.1),
+		NumberSequenceKeypoint.new(0.85, 0.1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	petals.Parent = emitterPart
+end
+
+function WorldProps.build(info: MapInfo, rng: Random, parent: Instance)
+	local taken: { Rect } = {}
+	local street = WorldKit.folder("StreetProps", parent)
+	for i = 1, VENDING_PAIRS do
+		local spot = findSpot(info, rng, taken, 7, 3)
+		if spot then
+			buildVendingPair(i, facingMiddle(spot), street)
+		end
+	end
+	for i = 1, SAKURA_TREES do
+		local spot = findSpot(info, rng, taken, 8, 8)
+		if spot then
+			buildSakura(i, spot, rng, street)
+		end
+	end
+	for i = 1, LANTERNS do
+		local spot = findSpot(info, rng, taken, 2, 2)
+		if spot then
+			buildLantern(i, spot, street)
+		end
+	end
+	buildPetals(info, parent)
+end
+
+return WorldProps
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX0000001F">
+					<Properties>
+						<string name="Name">WorldStreet</string>
+						<ProtectedString name="Source"><![CDATA[--!strict
+-- A rua: bordas de neon, faixa tracejada, postes de luz, o portao por onde os
+-- inimigos entram e o escudo da base. Tudo segue os waypoints do mapa, entao se
+-- o gen_map.py mudar o caminho, a decoracao acompanha sozinha.
+
+local WorldKit = require(script.Parent.WorldKit)
+
+type MapInfo = WorldKit.MapInfo
+
+local Colors = WorldKit.Colors
+
+local WorldStreet = {}
+
+local ROAD_TOP = 0.1 -- a estrada tem 0.2 de altura e centro em y = 0
+local DASH_LENGTH = 3.5
+local DASH_STEP = 8
+local LAMP_SPACING = 40
+local MAX_LAMPS = 12 -- cada poste tem uma luz; luz demais pesa no celular
+
+-- Direcao "para a esquerda" de quem anda na direcao d (no plano XZ).
+local function leftOf(d: Vector3): Vector3
+	return Vector3.new(-d.Z, 0, d.X)
+end
+
+-- Uma barra fina deitada no chao, indo de "from" ate "to".
+local function strip(name: string, from: Vector3, to: Vector3, width: number, height: number, color: Color3, parent: Instance, neon: boolean)
+	local length = (to - from).Magnitude
+	if length < 0.5 then
+		return
+	end
+	local mid = (from + to) / 2
+	local cf = CFrame.lookAt(mid, mid + (to - from).Unit)
+	WorldKit.part(name, Vector3.new(width, height, length), cf, color, parent, {
+		material = if neon then Enum.Material.Neon else Enum.Material.SmoothPlastic,
+	})
+end
+
+-- Bordas de neon dos dois lados de cada trecho.
+-- Na curva, o lado de DENTRO encolhe e o lado de FORA estica: assim a borda
+-- contorna a esquina sem atravessar a estrada.
+local function buildEdges(info: MapInfo, parent: Instance)
+	local wps = info.waypoints
+	local half = info.roadWidth / 2
+	local y = ROAD_TOP + 0.08
+	for i = 1, #wps - 1 do
+		local a, b = wps[i], wps[i + 1]
+		local d = (b - a).Unit
+		local left = leftOf(d)
+		for _, side in { 1, -1 } do
+			local sideDir = left * side
+			local startPoint = a - d * half -- ponta do mapa: estica ate a borda da junta
+			if i > 1 then
+				local cameFrom = (wps[i - 1] - a).Unit
+				startPoint = if cameFrom:Dot(sideDir) > 0 then a + d * half else a - d * half
+			end
+			local endPoint = b + d * half
+			if i < #wps - 1 then
+				local goesTo = (wps[i + 2] - b).Unit
+				endPoint = if goesTo:Dot(sideDir) > 0 then b - d * half else b + d * half
+			end
+			local offset = sideDir * (half - 0.25) + Vector3.new(0, y, 0)
+			strip(`Edge_{i}_{side}`, startPoint + offset, endPoint + offset, 0.35, 0.15, Colors.cyan, parent, true)
+		end
+	end
+end
+
+-- Faixa tracejada no meio da rua (mostra o caminho dos inimigos).
+local function buildDashes(info: MapInfo, parent: Instance)
+	local wps = info.waypoints
+	local half = info.roadWidth / 2
+	local y = Vector3.new(0, ROAD_TOP + 0.06, 0)
+	for i = 1, #wps - 1 do
+		local a, b = wps[i], wps[i + 1]
+		local d = (b - a).Unit
+		local usable = (b - a).Magnitude - 2 * (half + 2)
+		local count = math.floor(usable / DASH_STEP)
+		for k = 0, count do
+			local from = a + d * (half + 2 + k * DASH_STEP)
+			strip(`Dash_{i}_{k}`, from + y, from + d * DASH_LENGTH + y, 0.3, 0.12, Colors.white, parent, false)
+		end
+	end
+end
+
+local function buildLamp(index: number, ground: Vector3, overRoad: Vector3, parent: Instance)
+	local lamp = Instance.new("Model")
+	lamp.Name = `Lamp_{index}`
+	local poleHeight = 9
+	WorldKit.part("Pole", Vector3.new(0.4, poleHeight, 0.4), CFrame.new(ground + Vector3.new(0, poleHeight / 2, 0)), Colors.metal, lamp, { material = Enum.Material.Metal })
+	local armStart = ground + Vector3.new(0, poleHeight, 0)
+	local armEnd = armStart + overRoad * 2.5
+	strip("Arm", armStart, armEnd, 0.3, 0.3, Colors.metal, lamp, false)
+	local head = WorldKit.part("Head", Vector3.new(1.3, 0.5, 1.3), CFrame.new(armEnd - Vector3.new(0, 0.3, 0)), Colors.warm, lamp, { material = Enum.Material.Neon })
+	local light = Instance.new("PointLight")
+	light.Color = Colors.warm
+	light.Range = 18
+	light.Brightness = 1.4
+	light.Shadows = false
+	light.Parent = head
+	lamp.Parent = parent
+end
+
+-- Postes na beira da rua, lados alternados, longe das esquinas e dos slots.
+local function buildLamps(info: MapInfo, parent: Instance)
+	local wps = info.waypoints
+	local half = info.roadWidth / 2
+	local placed = 0
+	local walked = 0
+	local nextAt = LAMP_SPACING / 2
+	for i = 1, #wps - 1 do
+		local a, b = wps[i], wps[i + 1]
+		local d = (b - a).Unit
+		local length = (b - a).Magnitude
+		while nextAt <= walked + length and placed < MAX_LAMPS do
+			local t = nextAt - walked
+			nextAt += LAMP_SPACING
+			if t > info.roadWidth and t < length - info.roadWidth then
+				for _, side in { if placed % 2 == 0 then 1 else -1, if placed % 2 == 0 then -1 else 1 } do
+					local sideDir = leftOf(d) * side
+					local ground = a + d * t + sideDir * (half + 1.2)
+					local rect = { cx = ground.X, cz = ground.Z, sx = 0.6, sz = 0.6 }
+					if WorldKit.isClear(rect, info.slotRects, 0.6) and WorldKit.isClear(rect, info.blockedRects, 1) then
+						placed += 1
+						buildLamp(placed, ground, -sideDir, parent)
+						break
+					end
+				end
+			end
+		end
+		walked += length
+	end
+end
+
+-- Portao vermelho (original, estilo "arco de rua") onde os inimigos nascem.
+local function buildGate(info: MapInfo, parent: Instance)
+	local wps = info.waypoints
+	local p = wps[1]
+	local d = (wps[2] - wps[1]).Unit
+	local across = leftOf(d)
+	local gate = Instance.new("Model")
+	gate.Name = "EnemyGate"
+	local reach = info.roadWidth / 2 + 1.2
+	local height = 14
+	for _, side in { 1, -1 } do
+		local base = p + across * reach * side
+		WorldKit.part(`Pillar_{side}`, Vector3.new(1.6, height, 1.6), CFrame.new(base + Vector3.new(0, height / 2, 0)), Colors.red, gate, { shadow = true })
+	end
+	local top = p + Vector3.new(0, height + 0.6, 0)
+	WorldKit.part("TopBeam", Vector3.new(1.8, 1.2, reach * 2 + 5), CFrame.lookAt(top, top + across), Colors.pink, gate, { material = Enum.Material.Neon })
+	local low = p + Vector3.new(0, height - 2.6, 0)
+	WorldKit.part("LowBeam", Vector3.new(1.2, 0.8, reach * 2 + 1.6), CFrame.lookAt(low, low + across), Colors.red, gate)
+	local glow = Instance.new("PointLight")
+	glow.Color = Colors.pink
+	glow.Range = 22
+	glow.Brightness = 2
+	glow.Parent = gate:FindFirstChild("TopBeam")
+	gate.Parent = parent
+end
+
+-- Escudo e farol da base: o jogador sempre sabe o que precisa proteger.
+local function buildBaseShield(info: MapInfo, parent: Instance)
+	local base = info.playerBase
+	if not base then
+		return
+	end
+	local shield = Instance.new("Model")
+	shield.Name = "BaseShield"
+	local ground = Vector3.new(base.Position.X, 0, base.Position.Z)
+	local radius = math.max(base.Size.X, base.Size.Z) * 0.85
+	WorldKit.part("Dome", Vector3.new(radius * 2, radius * 2, radius * 2), CFrame.new(ground), Colors.cyan, shield, {
+		material = Enum.Material.ForceField,
+		shape = Enum.PartType.Ball,
+	})
+	-- Cilindro deitado: o eixo do Cylinder e o X, entao giramos 90 graus no Z.
+	WorldKit.part("Ring", Vector3.new(0.2, radius * 2 + 2, radius * 2 + 2), CFrame.new(ground + Vector3.new(0, ROAD_TOP + 0.1, 0)) * CFrame.Angles(0, 0, math.pi / 2), Colors.cyan, shield, {
+		material = Enum.Material.Neon,
+		shape = Enum.PartType.Cylinder,
+		transparency = 0.45,
+	})
+	local beaconHeight = 60
+	local beacon = WorldKit.part("Beacon", Vector3.new(0.8, beaconHeight, 0.8), CFrame.new(ground + Vector3.new(0, base.Size.Y + beaconHeight / 2, 0)), Colors.cyan, shield, {
+		material = Enum.Material.Neon,
+		transparency = 0.5,
+	})
+	local light = Instance.new("PointLight")
+	light.Color = Colors.cyan
+	light.Range = 24
+	light.Brightness = 2
+	light.Parent = beacon
+	shield.Parent = parent
+end
+
+function WorldStreet.build(info: MapInfo, parent: Instance)
+	buildEdges(info, WorldKit.folder("Edges", parent))
+	buildDashes(info, WorldKit.folder("Dashes", parent))
+	buildLamps(info, WorldKit.folder("Lamps", parent))
+	buildGate(info, parent)
+	buildBaseShield(info, parent)
+end
+
+return WorldStreet
+]]></ProtectedString>
+					</Properties>
+				</Item>
 			</Item>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX00000016">
+	<Item class="StarterPlayer" referent="RBX00000020">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX00000017">
+		<Item class="StarterPlayerScripts" referent="RBX00000021">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX00000018">
+			<Item class="LocalScript" referent="RBX00000022">
 				<Properties>
 					<string name="Name">Client</string>
 					<ProtectedString name="Source"><![CDATA[--!strict
@@ -2873,11 +4111,11 @@ for _, controller in loaded do
 end
 ]]></ProtectedString>
 				</Properties>
-				<Item class="Folder" referent="RBX00000019">
+				<Item class="Folder" referent="RBX00000023">
 					<Properties>
 						<string name="Name">Controllers</string>
 					</Properties>
-					<Item class="ModuleScript" referent="RBX0000001A">
+					<Item class="ModuleScript" referent="RBX00000024">
 						<Properties>
 							<string name="Name">DebugController</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -2994,7 +4232,7 @@ return DebugController
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000001B">
+					<Item class="ModuleScript" referent="RBX00000025">
 						<Properties>
 							<string name="Name">EnemyRenderer</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -3357,7 +4595,7 @@ return EnemyRenderer
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000001C">
+					<Item class="ModuleScript" referent="RBX00000026">
 						<Properties>
 							<string name="Name">FxController</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -4901,7 +6139,7 @@ return FxController
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000001D">
+					<Item class="ModuleScript" referent="RBX00000027">
 						<Properties>
 							<string name="Name">HudController</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -5369,7 +6607,7 @@ return HudController
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000001E">
+					<Item class="ModuleScript" referent="RBX00000028">
 						<Properties>
 							<string name="Name">PlacementController</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -6244,7 +7482,7 @@ return PlacementController
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000001F">
+					<Item class="ModuleScript" referent="RBX00000029">
 						<Properties>
 							<string name="Name">UnitFxController</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -6964,7 +8202,7 @@ return UnitFxController
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000020">
+					<Item class="ModuleScript" referent="RBX0000002A">
 						<Properties>
 							<string name="Name">UnitPanelController</string>
 							<ProtectedString name="Source"><![CDATA[--!strict
@@ -7966,15 +9204,15 @@ return UnitPanelController
 			</Item>
 		</Item>
 	</Item>
-	<Item class="Workspace" referent="RBX00000021">
+	<Item class="Workspace" referent="RBX0000002B">
 		<Properties>
 			<string name="Name">Workspace</string>
 		</Properties>
-		<Item class="Model" referent="RBX00000022">
+		<Item class="Model" referent="RBX0000002C">
 			<Properties>
 				<string name="Name">Map</string>
 			</Properties>
-			<Item class="Part" referent="RBX00000023">
+			<Item class="Part" referent="RBX0000002D">
 				<Properties>
 					<string name="Name">Ground</string>
 					<token name="TopSurface">0</token>
@@ -7986,11 +9224,11 @@ return UnitPanelController
 					<bool name="Anchored">true</bool>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX00000024">
+			<Item class="Folder" referent="RBX0000002E">
 				<Properties>
 					<string name="Name">Road</string>
 				</Properties>
-				<Item class="Part" referent="RBX00000025">
+				<Item class="Part" referent="RBX0000002F">
 					<Properties>
 						<string name="Name">Segment_1_2</string>
 						<token name="TopSurface">0</token>
@@ -8002,7 +9240,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000026">
+				<Item class="Part" referent="RBX00000030">
 					<Properties>
 						<string name="Name">Segment_2_3</string>
 						<token name="TopSurface">0</token>
@@ -8014,7 +9252,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000027">
+				<Item class="Part" referent="RBX00000031">
 					<Properties>
 						<string name="Name">Segment_3_4</string>
 						<token name="TopSurface">0</token>
@@ -8026,7 +9264,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000028">
+				<Item class="Part" referent="RBX00000032">
 					<Properties>
 						<string name="Name">Segment_4_5</string>
 						<token name="TopSurface">0</token>
@@ -8038,7 +9276,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000029">
+				<Item class="Part" referent="RBX00000033">
 					<Properties>
 						<string name="Name">Segment_5_6</string>
 						<token name="TopSurface">0</token>
@@ -8050,7 +9288,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002A">
+				<Item class="Part" referent="RBX00000034">
 					<Properties>
 						<string name="Name">Segment_6_7</string>
 						<token name="TopSurface">0</token>
@@ -8062,7 +9300,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002B">
+				<Item class="Part" referent="RBX00000035">
 					<Properties>
 						<string name="Name">Segment_7_8</string>
 						<token name="TopSurface">0</token>
@@ -8074,7 +9312,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002C">
+				<Item class="Part" referent="RBX00000036">
 					<Properties>
 						<string name="Name">Joint_1</string>
 						<token name="TopSurface">0</token>
@@ -8086,7 +9324,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002D">
+				<Item class="Part" referent="RBX00000037">
 					<Properties>
 						<string name="Name">Joint_2</string>
 						<token name="TopSurface">0</token>
@@ -8098,7 +9336,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002E">
+				<Item class="Part" referent="RBX00000038">
 					<Properties>
 						<string name="Name">Joint_3</string>
 						<token name="TopSurface">0</token>
@@ -8110,7 +9348,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000002F">
+				<Item class="Part" referent="RBX00000039">
 					<Properties>
 						<string name="Name">Joint_4</string>
 						<token name="TopSurface">0</token>
@@ -8122,7 +9360,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000030">
+				<Item class="Part" referent="RBX0000003A">
 					<Properties>
 						<string name="Name">Joint_5</string>
 						<token name="TopSurface">0</token>
@@ -8134,7 +9372,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000031">
+				<Item class="Part" referent="RBX0000003B">
 					<Properties>
 						<string name="Name">Joint_6</string>
 						<token name="TopSurface">0</token>
@@ -8146,7 +9384,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000032">
+				<Item class="Part" referent="RBX0000003C">
 					<Properties>
 						<string name="Name">Joint_7</string>
 						<token name="TopSurface">0</token>
@@ -8158,7 +9396,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000033">
+				<Item class="Part" referent="RBX0000003D">
 					<Properties>
 						<string name="Name">Joint_8</string>
 						<token name="TopSurface">0</token>
@@ -8171,11 +9409,11 @@ return UnitPanelController
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="Folder" referent="RBX00000034">
+			<Item class="Folder" referent="RBX0000003E">
 				<Properties>
 					<string name="Name">Waypoints</string>
 				</Properties>
-				<Item class="Part" referent="RBX00000035">
+				<Item class="Part" referent="RBX0000003F">
 					<Properties>
 						<string name="Name">1</string>
 						<token name="TopSurface">0</token>
@@ -8192,7 +9430,7 @@ return UnitPanelController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAADwPw==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000036">
+				<Item class="Part" referent="RBX00000040">
 					<Properties>
 						<string name="Name">2</string>
 						<token name="TopSurface">0</token>
@@ -8209,7 +9447,7 @@ return UnitPanelController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAAQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000037">
+				<Item class="Part" referent="RBX00000041">
 					<Properties>
 						<string name="Name">3</string>
 						<token name="TopSurface">0</token>
@@ -8226,7 +9464,7 @@ return UnitPanelController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAIQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000038">
+				<Item class="Part" referent="RBX00000042">
 					<Properties>
 						<string name="Name">4</string>
 						<token name="TopSurface">0</token>
@@ -8243,7 +9481,7 @@ return UnitPanelController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAQQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000039">
+				<Item class="Part" referent="RBX00000043">
 					<Properties>
 						<string name="Name">5</string>
 						<token name="TopSurface">0</token>
@@ -8260,7 +9498,7 @@ return UnitPanelController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAUQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003A">
+				<Item class="Part" referent="RBX00000044">
 					<Properties>
 						<string name="Name">6</string>
 						<token name="TopSurface">0</token>
@@ -8277,7 +9515,7 @@ return UnitPanelController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAYQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003B">
+				<Item class="Part" referent="RBX00000045">
 					<Properties>
 						<string name="Name">7</string>
 						<token name="TopSurface">0</token>
@@ -8294,7 +9532,7 @@ return UnitPanelController
 						<BinaryString name="AttributesSerialize">AQAAAAUAAABJbmRleAYAAAAAAAAcQA==</BinaryString>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000003C">
+				<Item class="Part" referent="RBX00000046">
 					<Properties>
 						<string name="Name">8</string>
 						<token name="TopSurface">0</token>
@@ -8312,7 +9550,7 @@ return UnitPanelController
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="Part" referent="RBX0000003D">
+			<Item class="Part" referent="RBX00000047">
 				<Properties>
 					<string name="Name">EnemySpawn</string>
 					<token name="TopSurface">0</token>
@@ -8325,7 +9563,7 @@ return UnitPanelController
 					<bool name="CanCollide">false</bool>
 				</Properties>
 			</Item>
-			<Item class="Part" referent="RBX0000003E">
+			<Item class="Part" referent="RBX00000048">
 				<Properties>
 					<string name="Name">PlayerBase</string>
 					<token name="TopSurface">0</token>
@@ -8338,11 +9576,11 @@ return UnitPanelController
 					<BinaryString name="AttributesSerialize">AQAAAAkAAABNYXhIZWFsdGgGAAAAAAAAWUA=</BinaryString>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX0000003F">
+			<Item class="Folder" referent="RBX00000049">
 				<Properties>
 					<string name="Name">Buildings</string>
 				</Properties>
-				<Item class="Part" referent="RBX00000040">
+				<Item class="Part" referent="RBX0000004A">
 					<Properties>
 						<string name="Name">Building_01</string>
 						<token name="TopSurface">0</token>
@@ -8354,7 +9592,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000041">
+				<Item class="Part" referent="RBX0000004B">
 					<Properties>
 						<string name="Name">Building_02</string>
 						<token name="TopSurface">0</token>
@@ -8366,7 +9604,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000042">
+				<Item class="Part" referent="RBX0000004C">
 					<Properties>
 						<string name="Name">Building_03</string>
 						<token name="TopSurface">0</token>
@@ -8378,7 +9616,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000043">
+				<Item class="Part" referent="RBX0000004D">
 					<Properties>
 						<string name="Name">Building_04</string>
 						<token name="TopSurface">0</token>
@@ -8390,7 +9628,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000044">
+				<Item class="Part" referent="RBX0000004E">
 					<Properties>
 						<string name="Name">Building_05</string>
 						<token name="TopSurface">0</token>
@@ -8402,7 +9640,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000045">
+				<Item class="Part" referent="RBX0000004F">
 					<Properties>
 						<string name="Name">Building_06</string>
 						<token name="TopSurface">0</token>
@@ -8414,7 +9652,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000046">
+				<Item class="Part" referent="RBX00000050">
 					<Properties>
 						<string name="Name">Building_07</string>
 						<token name="TopSurface">0</token>
@@ -8426,7 +9664,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000047">
+				<Item class="Part" referent="RBX00000051">
 					<Properties>
 						<string name="Name">Building_08</string>
 						<token name="TopSurface">0</token>
@@ -8438,7 +9676,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000048">
+				<Item class="Part" referent="RBX00000052">
 					<Properties>
 						<string name="Name">Building_09</string>
 						<token name="TopSurface">0</token>
@@ -8450,7 +9688,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000049">
+				<Item class="Part" referent="RBX00000053">
 					<Properties>
 						<string name="Name">Building_10</string>
 						<token name="TopSurface">0</token>
@@ -8462,7 +9700,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004A">
+				<Item class="Part" referent="RBX00000054">
 					<Properties>
 						<string name="Name">Building_11</string>
 						<token name="TopSurface">0</token>
@@ -8474,7 +9712,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004B">
+				<Item class="Part" referent="RBX00000055">
 					<Properties>
 						<string name="Name">Building_12</string>
 						<token name="TopSurface">0</token>
@@ -8486,7 +9724,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004C">
+				<Item class="Part" referent="RBX00000056">
 					<Properties>
 						<string name="Name">Building_13</string>
 						<token name="TopSurface">0</token>
@@ -8498,7 +9736,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004D">
+				<Item class="Part" referent="RBX00000057">
 					<Properties>
 						<string name="Name">Building_14</string>
 						<token name="TopSurface">0</token>
@@ -8510,7 +9748,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004E">
+				<Item class="Part" referent="RBX00000058">
 					<Properties>
 						<string name="Name">Building_15</string>
 						<token name="TopSurface">0</token>
@@ -8522,7 +9760,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000004F">
+				<Item class="Part" referent="RBX00000059">
 					<Properties>
 						<string name="Name">Building_16</string>
 						<token name="TopSurface">0</token>
@@ -8534,7 +9772,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000050">
+				<Item class="Part" referent="RBX0000005A">
 					<Properties>
 						<string name="Name">Building_17</string>
 						<token name="TopSurface">0</token>
@@ -8546,7 +9784,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000051">
+				<Item class="Part" referent="RBX0000005B">
 					<Properties>
 						<string name="Name">Building_18</string>
 						<token name="TopSurface">0</token>
@@ -8558,7 +9796,7 @@ return UnitPanelController
 						<bool name="Anchored">true</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000052">
+				<Item class="Part" referent="RBX0000005C">
 					<Properties>
 						<string name="Name">Building_19</string>
 						<token name="TopSurface">0</token>
@@ -8571,7 +9809,7 @@ return UnitPanelController
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="SpawnLocation" referent="RBX00000053">
+			<Item class="SpawnLocation" referent="RBX0000005D">
 				<Properties>
 					<string name="Name">PlayerSpawn</string>
 					<token name="TopSurface">0</token>
@@ -8585,11 +9823,11 @@ return UnitPanelController
 					<int name="Duration">0</int>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX00000054">
+			<Item class="Folder" referent="RBX0000005E">
 				<Properties>
 					<string name="Name">Placement</string>
 				</Properties>
-				<Item class="Part" referent="RBX00000055">
+				<Item class="Part" referent="RBX0000005F">
 					<Properties>
 						<string name="Name">Slot_01</string>
 						<token name="TopSurface">0</token>
@@ -8603,7 +9841,7 @@ return UnitPanelController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000056">
+				<Item class="Part" referent="RBX00000060">
 					<Properties>
 						<string name="Name">Slot_02</string>
 						<token name="TopSurface">0</token>
@@ -8617,7 +9855,7 @@ return UnitPanelController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000057">
+				<Item class="Part" referent="RBX00000061">
 					<Properties>
 						<string name="Name">Slot_03</string>
 						<token name="TopSurface">0</token>
@@ -8631,7 +9869,7 @@ return UnitPanelController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000058">
+				<Item class="Part" referent="RBX00000062">
 					<Properties>
 						<string name="Name">Slot_04</string>
 						<token name="TopSurface">0</token>
@@ -8645,7 +9883,7 @@ return UnitPanelController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX00000059">
+				<Item class="Part" referent="RBX00000063">
 					<Properties>
 						<string name="Name">Slot_05</string>
 						<token name="TopSurface">0</token>
@@ -8659,7 +9897,7 @@ return UnitPanelController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000005A">
+				<Item class="Part" referent="RBX00000064">
 					<Properties>
 						<string name="Name">Slot_06</string>
 						<token name="TopSurface">0</token>
@@ -8673,7 +9911,7 @@ return UnitPanelController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000005B">
+				<Item class="Part" referent="RBX00000065">
 					<Properties>
 						<string name="Name">Slot_07</string>
 						<token name="TopSurface">0</token>
@@ -8687,7 +9925,7 @@ return UnitPanelController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000005C">
+				<Item class="Part" referent="RBX00000066">
 					<Properties>
 						<string name="Name">Slot_08</string>
 						<token name="TopSurface">0</token>
@@ -8701,7 +9939,7 @@ return UnitPanelController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000005D">
+				<Item class="Part" referent="RBX00000067">
 					<Properties>
 						<string name="Name">Slot_09</string>
 						<token name="TopSurface">0</token>
@@ -8715,7 +9953,7 @@ return UnitPanelController
 						<bool name="CanCollide">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Part" referent="RBX0000005E">
+				<Item class="Part" referent="RBX00000068">
 					<Properties>
 						<string name="Name">Slot_10</string>
 						<token name="TopSurface">0</token>

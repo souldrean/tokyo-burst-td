@@ -86,7 +86,7 @@ local WAVES: { Types.WaveDef } = {
 -- Os slots ficam a ~12-14 studs do centro da estrada, por isso os alcances sao altos.
 local UNITS: { [string]: Types.UnitDef } = {
 	Ninja = {
-		displayName = "Ninja",
+		displayName = "Sumi • Ninja",
 		cost = 50,
 		range = 28,
 		damage = 8,
@@ -106,7 +106,7 @@ local UNITS: { [string]: Types.UnitDef } = {
 				cooldown = 0.45,
 				splashRadius = 0,
 				evolution = {
-					displayName = "Shadow Ninja",
+					displayName = "Sumi • Shadow Ninja",
 					accentColor = Color3.fromRGB(170, 80, 255),
 					ability = { kind = "MultiShot", description = "Throws 3 shurikens at once", targets = 3 },
 				},
@@ -114,7 +114,7 @@ local UNITS: { [string]: Types.UnitDef } = {
 		},
 	},
 	Samurai = {
-		displayName = "Samurai",
+		displayName = "Tetsu • Samurai",
 		cost = 160,
 		range = 18,
 		damage = 30,
@@ -134,7 +134,7 @@ local UNITS: { [string]: Types.UnitDef } = {
 				cooldown = 1.2,
 				splashRadius = 0,
 				evolution = {
-					displayName = "Storm Samurai",
+					displayName = "Tetsu • Storm Samurai",
 					accentColor = Color3.fromRGB(120, 200, 255),
 					ability = { kind = "Crit", description = "Every 3rd slash hits 3x harder", every = 3, multiplier = 3 },
 				},
@@ -142,7 +142,7 @@ local UNITS: { [string]: Types.UnitDef } = {
 		},
 	},
 	Mage = {
-		displayName = "Mage",
+		displayName = "Mirai • Mage",
 		cost = 260,
 		range = 24,
 		damage = 13,
@@ -162,7 +162,7 @@ local UNITS: { [string]: Types.UnitDef } = {
 				cooldown = 1.3,
 				splashRadius = 12,
 				evolution = {
-					displayName = "Frost Archmage",
+					displayName = "Mirai • Frost Archmage",
 					accentColor = Color3.fromRGB(170, 240, 255),
 					ability = { kind = "Slow", description = "Hits slow enemies by 40% for 2s", factor = 0.6, duration = 2 },
 				},
